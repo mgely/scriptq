@@ -71,11 +71,6 @@ class BatchingFrame(tk.Canvas):
             l.grid(row=i, column=0, sticky='news')
 
         self.update()
-        print(self.canvasy(l.winfo_height()))
-        print(self.bbox("all"))
-        print(self.canvasy(30*l.winfo_height()))
-        self.config(height=30*l.winfo_height())
-
         self.config(scrollregion=self.bbox("all"))
 
     def build_gridframe(self):
@@ -191,7 +186,6 @@ class BatchingFrame(tk.Canvas):
         # stop from scolling up
         if float(args[1])<0:
             args = (args[0], "0")
-        print(args)
         self.yview(*args)
         time.sleep(0.01)
         self.update()
