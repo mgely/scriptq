@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter.font import Font
+from tkinter import PhotoImage
 from tkinter import ttk
 import time
 
@@ -14,6 +14,8 @@ class GuiWindow(ttk.Frame):
 
         # Set the initial size of the window in pixels
         self.master.geometry("800x600")
+
+        self.master.resizable(False, True)
 
         # Load the logo to the title bar
         # if _os_type == "windows":
@@ -64,10 +66,16 @@ class BatchingFrame(tk.Canvas):
         self.bind("<MouseWheel>", self.scroll_y_wheel)
 
         canvas_content = tk.Frame(self, bg="blue")
-        self.create_window((0, 0), window=canvas_content, anchor='nw')
+        self.create_window((0, 0), 
+            window=canvas_content, 
+            anchor='nw', 
+            width = 800)
+        self.master.columnconfigure(0, weight=1)
+        self.columnconfigure(0, weight=1)
+        canvas_content.columnconfigure(0, weight=1)
 
         for i in range(30):
-            l = tk.Label(canvas_content,text=(str(i)))
+            l = ScriptWidget(canvas_content)
             l.grid(row=i, column=0, sticky='news')
 
         self.update()
@@ -220,5 +228,50 @@ class BatchingFrame(tk.Canvas):
         self.update()
         self.config(scrollregion=self.bbox("all"))
 
+class ScriptWidget(ttk.Frame):
+    def __init__(self, parent):
+        super(ScriptWidget, self).__init__(parent)
+
+        self.state = "Q" 
+        '''
+        Options:
+         - "Q" for queued script
+         - "R" for running
+         - "F" for finnished
+        '''
+        pady = (5,20)
+        padx_text = 5
+
+        l = ttk.Label(self,text = '11')
+        l.grid(row=0, column=1,sticky='news', padx = padx_text)
+        b = ttk.Label(self,text = 'queued')
+        b.grid(row=0, column=4, sticky='news', padx = padx_text)
+
+        ttk.Separator(self, orient=tk.VERTICAL).grid(column=1, row=0, rowspan=1, sticky='nse')
+        ttk.Separator(self, orient=tk.HORIZONTAL).grid(column=0, row=0, columnspan=6, sticky='swe', pady=10)
+
+
+        b = ImageButton(self,image = 'insert.gif')
+        b.grid(row=0, column=0, sticky='swe', padx = (5,0))
+
+
+        b = ImageButton(self,image = 'remove.gif')
+        b.grid(row=0, column=2, sticky='news', pady=pady)
+        b = ImageButton(self,image = 'move.gif')
+        b.grid(row=0, column=3, sticky='news', pady=pady)
+        
+        b = ttk.Button(self,text = r'D:\git_repos\script_queuer\src')
+        b.grid(row=0, column=5, sticky='news', pady=pady, padx = (0,40))
+        
+        self.columnconfigure(5, weight=1)
+
+class ImageButton(ttk.Button):
+    """docstring for ImageButton"""
+    def __init__(self, *args, image=None, **kwargs):
+        image = PhotoImage(file=image)
+        image = image.subsample(2, 2)
+        super(ImageButton, self).__init__(*args, image=image, **kwargs)
+        self.image = image
+        
 
 GuiWindow()
