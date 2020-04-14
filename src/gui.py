@@ -1,8 +1,9 @@
 import tkinter as tk
+from tkinter import messagebox, filedialog
 from tkinter import PhotoImage
 from tkinter import ttk
 import time
-
+from os import path
 
 class GuiWindow(ttk.Frame):
     def __init__(self):
@@ -56,6 +57,7 @@ class GuiWindow(ttk.Frame):
 class BatchingFrame(tk.Canvas):
     def __init__(self,master,**kwargs):
         self.master = master
+        self.latest_searched_directory = None
 
         self.build_gridframe()
         self.build_menubar()
@@ -65,21 +67,54 @@ class BatchingFrame(tk.Canvas):
 
         self.bind("<MouseWheel>", self.scroll_y_wheel)
 
-        canvas_content = tk.Frame(self, bg="blue")
+        self.canvas_content = tk.Frame(self, bg="blue")
         self.create_window((0, 0), 
-            window=canvas_content, 
+            window=self.canvas_content, 
             anchor='nw', 
             width = 800)
         self.master.columnconfigure(0, weight=1)
         self.columnconfigure(0, weight=1)
-        canvas_content.columnconfigure(0, weight=1)
+        self.canvas_content.columnconfigure(0, weight=1)
 
-        for i in range(30):
-            l = ScriptWidget(canvas_content)
-            l.grid(row=i, column=0, sticky='news')
+        
+        x = ScriptWidget(self)
+        x.grid(row=0, column=0, sticky='news')
+        self.scripts = [x]
 
         self.update()
         self.config(scrollregion=self.bbox("all"))
+
+    def insert(self, position = -1):
+
+        # Prompt user for file name
+        if self.latest_searched_directory == None:
+            script_path = filedialog.askopenfilename()
+        else:
+            script_path = filedialog.askopenfilename(initialdir=self.latest_searched_directory)
+
+        
+
+        if script_path == "":
+            # User cancelled
+            return
+
+        self.latest_searched_directory = path.dirname(script_path)
+
+        sw = ScriptWidget(self, script_path = script_path, state = 'queued')
+
+        self.scripts.insert(position+1,sw)
+        self.update_script_widgets()
+
+    def update_script_widgets(self):
+        id = 1
+        for i,s in enumerate(self.scripts):
+            s.position = i
+            if s.state != 'done' and s.state != None:
+                s.id = str(id)
+                id+=1
+
+            s.grid(row=i, column=0, sticky='news')
+            s.add_widgets()
 
     def build_gridframe(self):
         """
@@ -229,41 +264,94 @@ class BatchingFrame(tk.Canvas):
         self.config(scrollregion=self.bbox("all"))
 
 class ScriptWidget(ttk.Frame):
-    def __init__(self, parent):
-        super(ScriptWidget, self).__init__(parent)
-
-        self.state = "Q" 
+    def __init__(self, parent, position = 1, script_path = None, state = None):
+        super(ScriptWidget, self).__init__(parent.canvas_content)
+        self.parent = parent
+        self.state = state
+        self.script_path = script_path
+        self.id = '11'
+        self.position = position
         '''
         Options:
          - "Q" for queued script
          - "R" for running
          - "F" for finnished
         '''
-        pady = (5,20)
-        padx_text = 5
 
-        l = ttk.Label(self,text = '11')
-        l.grid(row=0, column=1,sticky='news', padx = padx_text)
-        b = ttk.Label(self,text = 'queued')
-        b.grid(row=0, column=4, sticky='news', padx = padx_text)
+        self.pady = (5,20)
+        self.padx_text = 5
+        self.add_widgets()
 
-        ttk.Separator(self, orient=tk.VERTICAL).grid(column=1, row=0, rowspan=1, sticky='nse')
-        ttk.Separator(self, orient=tk.HORIZONTAL).grid(column=0, row=0, columnspan=6, sticky='swe', pady=10)
+    def add_widgets(self):
+
+        if self.state == None:
+            ttk.Separator(self, orient=tk.HORIZONTAL).grid(column=0, row=0, columnspan=10, sticky='swe', pady=10)
+            b = ImageButton(self,image = 'insert.gif', command = self.insert)
+            b.grid(row=0, column=0, sticky='swe', padx = (5,0))
+            self.columnconfigure(7, weight=1)
+            return
+
+        l = ttk.Label(self,text = self.id)
+        l.grid(row=0, column=1,sticky='news', padx = self.padx_text)
+
+        b = ttk.Label(self,text = self.state)
+        b.grid(row=0, column=5, sticky='news', padx = self.padx_text)
+
+        # ttk.Separator(self, orient=tk.VERTICAL).grid(column=1, row=0, rowspan=1, sticky='nse')
+        ttk.Separator(self, orient=tk.HORIZONTAL).grid(column=0, row=0, columnspan=10, sticky='swe', pady=10)
 
 
-        b = ImageButton(self,image = 'insert.gif')
+        b = ImageButton(self,image = 'insert.gif', 
+            command = self.insert)
         b.grid(row=0, column=0, sticky='swe', padx = (5,0))
 
 
         b = ImageButton(self,image = 'remove.gif')
-        b.grid(row=0, column=2, sticky='news', pady=pady)
-        b = ImageButton(self,image = 'move.gif')
-        b.grid(row=0, column=3, sticky='news', pady=pady)
+        b.grid(row=0, column=2, sticky='news', pady=self.pady)
+
+        if self.state == 'queued':
+            b = ImageButton(self,image = 'move.gif')
+        else:
+            b = ImageButton(self,image = 'blank.gif')
+        b.grid(row=0, column=3, sticky='news', pady=self.pady)
+
+        if self.state == 'running':
+            b = ImageButton(self,image = 'stop.gif')
+        else:
+            b = ImageButton(self,image = 'blank.gif')
+        b.grid(row=0, column=4, sticky='news', pady=self.pady)
         
-        b = ttk.Button(self,text = r'D:\git_repos\script_queuer\src')
-        b.grid(row=0, column=5, sticky='news', pady=pady, padx = (0,40))
+        if self.state == 'done':
+
+            b = ttk.Button(self,text = "view log")
+            b.grid(row=0, column=6, sticky='nes', pady=self.pady)
+            
+            b = ttk.Button(self,text = self.script_path)
+            b.grid(row=0, column=7, sticky='news', pady=self.pady, padx = (0,40))
+        else:
+            b = ttk.Button(self,text = self.script_path)
+            b.grid(row=0, column=6,columnspan=2, sticky='news', pady=self.pady, padx = (0,40))
         
-        self.columnconfigure(5, weight=1)
+        self.columnconfigure(7, weight=1)
+
+
+    def insert(self):
+       self.parent.insert(self.position)
+
+    def queue(self):
+        self.state = 'queued'
+        self.add_widgets()
+
+    def done(self, success):
+
+        self.success = success
+        self.state = 'done'
+        self.add_widgets()
+
+    def run(self):
+        self.state = 'running'
+        self.add_widgets()
+
 
 class ImageButton(ttk.Button):
     """docstring for ImageButton"""
