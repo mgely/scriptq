@@ -1,7 +1,9 @@
 import tkinter as tk
-from tkinter import messagebox, filedialog, simpledialog
+from tkinter import messagebox, filedialog, simpledialog, scrolledtext
 from tkinter import PhotoImage
 from tkinter import ttk
+import subprocess
+from threading import Thread 
 import time
 from os import path
 
@@ -54,6 +56,8 @@ class GuiWindow(ttk.Frame):
                 "Oops.. The GUI crashed.\n\n"
             )
 
+
+
 class BatchingFrame(tk.Canvas):
     def __init__(self,master,**kwargs):
         self.master = master
@@ -65,6 +69,7 @@ class BatchingFrame(tk.Canvas):
         self.build_canvas()
         self.configure_scrollbars()
 
+        self.t_output_window_update = 100 #ms
         self.bind("<MouseWheel>", self.scroll_y_wheel)
 
         self.canvas_content = tk.Frame(self)
@@ -95,6 +100,7 @@ class BatchingFrame(tk.Canvas):
 
         self.update()
         self.config(scrollregion=self.bbox("all"))
+        
 
     def insert(self, position):
 
@@ -118,10 +124,16 @@ class BatchingFrame(tk.Canvas):
         self.update_script_widgets()
 
     def move(self, position):
+        if self.state == 'running':
+            message = " 1 = place below row 1\n etc...\n-1 = place at end"
+            minvalue = 0
+        else:
+            message = " 0 = place first \n 1 = place below row 1\n etc...\n-1 = place at end"
+            minvalue = -1
 
-        new_position = tk.simpledialog.askinteger("Move to", " 0 = move to first position\n 1 = move below row 1\n etc...\n-1 = move to end",
+        new_position = tk.simpledialog.askinteger("Move to", message,
                                 parent=self.master,
-                                 minvalue=-1, maxvalue=len(self.scripts))
+                                 minvalue=minvalue, maxvalue=len(self.scripts))
         if new_position is None:
             # User cancelled
             return
@@ -145,9 +157,84 @@ class BatchingFrame(tk.Canvas):
         self.update_script_widgets()
 
     def run(self, position):
+
+        self.start_script_process(self.scripts[position].script_path)
+
         self.state = 'running'
         self.scripts[position].run()
         self.update_script_widgets()
+
+    def start_script_process(self, script):
+
+        # Open up the output window
+        self.output_window = tk.Toplevel(self.master)
+        self.output_window.title("Output | Script queuer")   
+        self.output_window.geometry("400x400")
+        self.output_window.minsize(200,150)
+
+        # Put a scrollable text region in it
+        self.output_text_widget = scrolledtext.ScrolledText(self.output_window)
+        self.output_text_widget.grid(column = 0, row=0, sticky = 'news')
+        self.output_window.rowconfigure(0, weight=1)
+        self.output_window.columnconfigure(0, weight=1)
+
+        # Add a button to toggle following the output
+        b = ToggleFollowButton(self.output_window, 
+          text='Autoscroll')
+        b.grid(column = 0,row=1, sticky = 'nws')
+
+
+        # Start the script subprocess
+        self.script_process = subprocess.Popen(['python','-u','test.py'],
+            stdout = subprocess.PIPE,
+            stderr = subprocess.PIPE, 
+            bufsize=1,
+            shell=True
+            )
+        self.line_buffer = []
+        '''
+        Populated with contents of process
+        stdout by the reader function in a 
+        seperate thread.
+        '''
+        self.buffer_filling_thread =Thread(target=reader,
+            args=(
+                    self.script_process.stdout,
+                    self.line_buffer
+                    ))
+        self.buffer_filling_thread.daemon=True
+        self.buffer_filling_thread.start()
+
+
+        self.after(
+                self.t_output_window_update, 
+                self.manage_script_process)
+
+    def manage_script_process(self):
+
+        while self.line_buffer:
+            self.output_text_widget.insert(tk.INSERT,self.line_buffer.pop(0))
+        # self.output_text_widget.insert(tk.INSERT,self.script_process.stdout.readline())
+
+        if self.output_window.follow:
+            self.output_text_widget.see("end")
+
+        poll =self.script_process.poll()
+        if poll == 0:
+            print('success')
+        elif poll == 1:
+            print('failure')
+            while True:
+                line = self.script_process.stderr.readline()
+                if not line:
+                    break
+                else:
+                    self.output_text_widget.insert(tk.INSERT,line)
+            self.output_text_widget.see("end")
+        else:
+            self.after(
+                self.t_output_window_update, 
+                self.manage_script_process)
 
     def stop(self, position):
         self.state = 'stopped'
@@ -364,7 +451,9 @@ class ScriptWidget(ttk.Frame):
         self.width_number_text = 2
         self.width_state_text = 10
 
+
     def add_widgets(self):
+
 
         if self.state == None:
             # ttk.Separator(self, orient=tk.HORIZONTAL).grid(column=0, row=0, columnspan=10, sticky='swe', pady=10)
@@ -392,6 +481,7 @@ class ScriptWidget(ttk.Frame):
 
         if self.state == 'done' and self.id<0:
             b = ImageButton(self,image = 'half_blank.gif')
+            b.config(state=tk.DISABLED)
         else:
             b = ImageButton(self,image = 'insert.gif', 
                 command = (lambda: self.parent.insert(self.position)))
@@ -407,6 +497,7 @@ class ScriptWidget(ttk.Frame):
                 command = (lambda: self.parent.move(self.position)))
         else:
             b = ImageButton(self,image = 'blank.gif')
+            b.config(state=tk.DISABLED)
         b.grid(row=0, column=3, sticky='news', pady=self.pady)
 
         if self.state == 'running':
@@ -417,6 +508,7 @@ class ScriptWidget(ttk.Frame):
                 command = (lambda: self.parent.run(self.position)))
         else:
             b = ImageButton(self,image = 'blank.gif')
+            b.config(state=tk.DISABLED)
         b.grid(row=0, column=4, sticky='news', pady=self.pady)
         
         if self.state == 'done':
@@ -444,9 +536,10 @@ class ScriptWidget(ttk.Frame):
         self.add_widgets()
 
     def run(self):
+
         self.state = 'running'
-        # TODO: actually start the script
         self.add_widgets()
+
 
     def stop(self):
         self.state = 'stopped'
@@ -461,6 +554,35 @@ class ImageButton(ttk.Button):
         image = image.subsample(2, 2)
         super(ImageButton, self).__init__(*args, image=image, **kwargs)
         self.image = image
+
+class ToggleFollowButton(tk.Radiobutton):
+    """docstring for ToggleFollowButton"""
+    def __init__(self, parent, text):
+        self.state = tk.BooleanVar()
+        self.parent = parent
+        self.parent.follow = True
+        self.state.set(True)
+        super(ToggleFollowButton, self).__init__(parent, text = text, variable = self.state, value = True, command = self.click)
+
+    def click(self):
+        if self.state.get():
+            self.config(value = False)
+            self.parent.follow = False
+        else:
+            # TODO: add l.see("end")
+            self.config(value = True)   
+            self.state.set(True)    
+            self.parent.follow = True
         
+def reader(f,buffer):
+    '''Utility function runing in a thread
+    which transfers any lines from f into a buffer
+    '''
+    while True:
+        line=f.readline()
+        if line:
+            buffer.append(line)
+        else:
+            break
 
 GuiWindow()
