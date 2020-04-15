@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import messagebox, filedialog
+from tkinter import messagebox, filedialog, simpledialog
 from tkinter import PhotoImage
 from tkinter import ttk
 import time
@@ -67,7 +67,7 @@ class BatchingFrame(tk.Canvas):
 
         self.bind("<MouseWheel>", self.scroll_y_wheel)
 
-        self.canvas_content = tk.Frame(self, bg="blue")
+        self.canvas_content = tk.Frame(self)
         self.create_window((0, 0), 
             window=self.canvas_content, 
             anchor='nw', 
@@ -76,15 +76,27 @@ class BatchingFrame(tk.Canvas):
         self.columnconfigure(0, weight=1)
         self.canvas_content.columnconfigure(0, weight=1)
 
-        
-        x = ScriptWidget(self)
-        x.grid(row=0, column=0, sticky='news')
-        self.scripts = [x]
+        self.state = 'stopped' # other option: 'running'
+
+        # # Default opening screen
+        # self.scripts = []
+
+        # Custom opening screen for debugging
+        self.scripts = [
+            ScriptWidget(self, script_path = '-2', state = 'done', success = 'failed'),
+            ScriptWidget(self, script_path = '-1', state = 'done', success = 'done'),
+            ScriptWidget(self, script_path = '1', state = 'queued'),
+            ScriptWidget(self, script_path = '2', state = 'queued')
+            ]
+
+        self.update_script_widgets()
+
+
 
         self.update()
         self.config(scrollregion=self.bbox("all"))
 
-    def insert(self, position = -1):
+    def insert(self, position):
 
         # Prompt user for file name
         if self.latest_searched_directory == None:
@@ -105,14 +117,88 @@ class BatchingFrame(tk.Canvas):
         self.scripts.insert(position+1,sw)
         self.update_script_widgets()
 
+    def move(self, position):
+
+        new_position = tk.simpledialog.askinteger("Move to", " 0 = move to first position\n 1 = move below row 1\n etc...\n-1 = move to end",
+                                parent=self.master,
+                                 minvalue=-1, maxvalue=len(self.scripts))
+        if new_position is None:
+            # User cancelled
+            return
+        elif new_position == -1:
+            new_position = len(self.scripts)
+        else:
+            new_position += self.position_0
+
+        self.scripts.insert(new_position,self.scripts[position])
+        if new_position > position:
+            self.scripts.pop(position)
+        else:
+            self.scripts.pop(position + 1)
+
+        self.update_script_widgets()
+
+    def remove(self, position):
+
+        self.scripts[position].destroy()
+        self.scripts.pop(position)
+        self.update_script_widgets()
+
+    def run(self, position):
+        self.state = 'running'
+        self.scripts[position].run()
+        self.update_script_widgets()
+
+    def stop(self, position):
+        self.state = 'stopped'
+        self.scripts[position].stop()
+
+        stopped = self.scripts[position]
+        duplicate = ScriptWidget(self, 
+            script_path = stopped.script_path, 
+            state = 'done')
+        duplicate.log_path = stopped.log_path
+        duplicate.success = 'stopped'
+
+        self.scripts.insert(position, duplicate)
+        self.update_script_widgets()
+
     def update_script_widgets(self):
+        if len(self.scripts) == 0:
+            self.scripts = [ScriptWidget(self)]
+
         id = 1
         for i,s in enumerate(self.scripts):
             s.position = i
             if s.state != 'done' and s.state != None:
+                # We passed all the done scripts
+                if id==1:
+                    self.position_0 = i
+                    # topmost non-run scipt
+                    # if was just move there, we should
+                    # adjust its state
+                    if self.state == 'running':
+                        s.run()
+                    elif self.state == 'stopped':
+                        s.stop()
+
+                    # give zero and negative ids to all the done scripts
+                    neg_id = 0
+                    for position in range(i-1,-1,-1):
+                        self.scripts[position].id = neg_id
+                        neg_id -= 1
+
+                elif id>1:
+                    # scripts lower down the queue:
+                    # if they were just moved, we should
+                    # adjust their state
+                    s.queue()
+
                 s.id = str(id)
                 id+=1
 
+
+        for i,s in enumerate(self.scripts):
             s.grid(row=i, column=0, sticky='news')
             s.add_widgets()
 
@@ -264,59 +350,71 @@ class BatchingFrame(tk.Canvas):
         self.config(scrollregion=self.bbox("all"))
 
 class ScriptWidget(ttk.Frame):
-    def __init__(self, parent, position = 1, script_path = None, state = None):
+    def __init__(self, parent, script_path = None, state = None, success = None):
         super(ScriptWidget, self).__init__(parent.canvas_content)
         self.parent = parent
         self.state = state
         self.script_path = script_path
-        self.id = '11'
-        self.position = position
-        '''
-        Options:
-         - "Q" for queued script
-         - "R" for running
-         - "F" for finnished
-        '''
+        self.log_path = ''
+        self.id = None 
+        self.position = None
+        self.success = success
 
-        self.pady = (5,20)
-        self.padx_text = 5
-        self.add_widgets()
+        self.pady = (1,1)#(5,20)
+        self.width_number_text = 2
+        self.width_state_text = 10
 
     def add_widgets(self):
 
         if self.state == None:
-            ttk.Separator(self, orient=tk.HORIZONTAL).grid(column=0, row=0, columnspan=10, sticky='swe', pady=10)
+            # ttk.Separator(self, orient=tk.HORIZONTAL).grid(column=0, row=0, columnspan=10, sticky='swe', pady=10)
             b = ImageButton(self,image = 'insert.gif', command = self.insert)
             b.grid(row=0, column=0, sticky='swe', padx = (5,0))
             self.columnconfigure(7, weight=1)
             return
 
-        l = ttk.Label(self,text = self.id)
-        l.grid(row=0, column=1,sticky='news', padx = self.padx_text)
+        if self.state == 'done':
+            l = ttk.Label(self,text = '', width= self.width_number_text)
+        else:
+            l = ttk.Label(self,text = self.id, width= self.width_number_text, anchor="center")
+        l.grid(row=0, column=1,sticky='news')
 
-        b = ttk.Label(self,text = self.state)
-        b.grid(row=0, column=5, sticky='news', padx = self.padx_text)
+        if self.state == 'done':
+            b = ttk.Label(self,text = self.success, width= self.width_state_text, anchor="center")
+        elif self.state == 'stopped':
+            b = ttk.Label(self,text = 'ready', width= self.width_state_text, anchor="center", background="green")
+        else:
+            b = ttk.Label(self,text = self.state, width= self.width_state_text, anchor="center")
+        b.grid(row=0, column=5, sticky='news')
 
         # ttk.Separator(self, orient=tk.VERTICAL).grid(column=1, row=0, rowspan=1, sticky='nse')
-        ttk.Separator(self, orient=tk.HORIZONTAL).grid(column=0, row=0, columnspan=10, sticky='swe', pady=10)
+        # ttk.Separator(self, orient=tk.HORIZONTAL).grid(column=0, row=0, columnspan=10, sticky='swe', pady=10)
 
-
-        b = ImageButton(self,image = 'insert.gif', 
-            command = self.insert)
+        if self.state == 'done' and self.id<0:
+            b = ImageButton(self,image = 'half_blank.gif')
+        else:
+            b = ImageButton(self,image = 'insert.gif', 
+                command = (lambda: self.parent.insert(self.position)))
         b.grid(row=0, column=0, sticky='swe', padx = (5,0))
 
 
-        b = ImageButton(self,image = 'remove.gif')
+        b = ImageButton(self,image = 'remove.gif', 
+            command = (lambda: self.parent.remove(self.position)))
         b.grid(row=0, column=2, sticky='news', pady=self.pady)
 
-        if self.state == 'queued':
-            b = ImageButton(self,image = 'move.gif')
+        if self.state in ['queued','stopped'] :
+            b = ImageButton(self,image = 'move.gif', 
+                command = (lambda: self.parent.move(self.position)))
         else:
             b = ImageButton(self,image = 'blank.gif')
         b.grid(row=0, column=3, sticky='news', pady=self.pady)
 
         if self.state == 'running':
-            b = ImageButton(self,image = 'stop.gif')
+            b = ImageButton(self,image = 'stop.gif', 
+            command = (lambda: self.parent.stop(self.position)))
+        elif self.state == 'stopped':
+            b = ImageButton(self,image = 'run.gif',
+                command = (lambda: self.parent.run(self.position)))
         else:
             b = ImageButton(self,image = 'blank.gif')
         b.grid(row=0, column=4, sticky='news', pady=self.pady)
@@ -326,7 +424,7 @@ class ScriptWidget(ttk.Frame):
             b = ttk.Button(self,text = "view log")
             b.grid(row=0, column=6, sticky='nes', pady=self.pady)
             
-            b = ttk.Button(self,text = self.script_path)
+            b = ttk.Button(self,text = self.script_path,compound = 'left')
             b.grid(row=0, column=7, sticky='news', pady=self.pady, padx = (0,40))
         else:
             b = ttk.Button(self,text = self.script_path)
@@ -334,9 +432,6 @@ class ScriptWidget(ttk.Frame):
         
         self.columnconfigure(7, weight=1)
 
-
-    def insert(self):
-       self.parent.insert(self.position)
 
     def queue(self):
         self.state = 'queued'
@@ -350,7 +445,13 @@ class ScriptWidget(ttk.Frame):
 
     def run(self):
         self.state = 'running'
+        # TODO: actually start the script
         self.add_widgets()
+
+    def stop(self):
+        self.state = 'stopped'
+        self.add_widgets()
+
 
 
 class ImageButton(ttk.Button):
