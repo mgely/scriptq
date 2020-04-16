@@ -61,13 +61,14 @@ class GuiWindow(ttk.Frame):
 
 
 class BatchingFrame(tk.Canvas):
+
     def __init__(self,master,**kwargs):
         self.master = master
         self.latest_searched_directory = None
         self.running_script = None
 
         self.build_gridframe()
-        self.build_menubar()
+        # self.build_menubar()
         self.build_scrollbars()
         self.build_canvas()
         self.configure_scrollbars()
@@ -94,21 +95,14 @@ class BatchingFrame(tk.Canvas):
 
         # Custom opening screen for debugging
         self.scripts = [
-            ScriptWidget(self, script_path = '-2', state = 'ended', success = 'failed'),
-            ScriptWidget(self, script_path = '-1', state = 'ended', success = 'done'),
-            ScriptWidget(self, script_path = '1', state = 'queued'),
-            ScriptWidget(self, script_path = '2', state = 'queued')
+            InsertWidget(self),
             ]
 
         self.update_script_widgets()
 
-
-
         self.update()
         self.config(scrollregion=self.bbox("all"))
 
-
-    
     def build_output_window(self):
         if self.output_window_visible:
             # Has already been built
@@ -201,12 +195,20 @@ class BatchingFrame(tk.Canvas):
 
     def run(self, position):
 
+        script_path = self.scripts[position].script_path
+
+        # Check if the script is a valid file
+        if not path.exists(script_path):
+            messagebox.showerror('File not found', 'File not found at address %s'%script_path)
+            return
+
         self.running_script = self.scripts[position]
         self.running_script_position = position
+        self.running_script.log = ''
 
         # Start the script and setup the communication
         # with subprocess
-        self.start_script_process(self.scripts[position].script_path)
+        self.start_script_process(script_path)
 
         # Delete the contents of the output window
         if self.output_window_visible:
@@ -219,13 +221,13 @@ class BatchingFrame(tk.Canvas):
                 self.manage_script_process)
 
         self.state = 'running'
-        self.scripts[position].run()
+        self.running_script.state = 'running'
         self.update_script_widgets()
 
     def start_script_process(self, script):
 
         # Start the script subprocess
-        self.script_process = subprocess.Popen(['python','-u','test.py'],
+        self.script_process = subprocess.Popen(['python','-u',script],
             stdout = subprocess.PIPE,
             stderr = subprocess.PIPE, 
             bufsize=1)
@@ -283,7 +285,7 @@ class BatchingFrame(tk.Canvas):
             if poll==1 and self.state == 'stopped':
                 # User interrupted the script
 
-                self.running_script.stop()
+                self.running_script.state = 'stopped'
 
                 stopped = self.running_script
                 duplicate = ScriptWidget(self, 
@@ -298,10 +300,13 @@ class BatchingFrame(tk.Canvas):
             else:
                 if poll==1:
                     # Script stopped because of an error
-                    self.running_script.end(success = 'failed')
+                    self.running_script.state = 'ended'
+                    self.running_script.success = 'failed'
+                
                 elif poll==0:
                     # Script successfully ended
-                    self.running_script.end(success = 'done')
+                    self.running_script.state = 'ended'
+                    self.running_script.success = 'done'
                 
 
                 if self.running_script_position+1<len(self.scripts):
@@ -309,6 +314,7 @@ class BatchingFrame(tk.Canvas):
                     self.run(position = self.running_script_position+1)
                 else:
                     # no more scripts to be run, update visual information
+                    self.state = 'stopped'
                     self.update_script_widgets()
 
         else:   
@@ -316,48 +322,45 @@ class BatchingFrame(tk.Canvas):
                 self.t_output_monitoring, 
                 self.manage_script_process)
 
-
-
-    def stop(self, position):
+    def stop(self):
         self.state = 'stopped'
 
         # Interrupt process
         self.script_process.kill()
 
     def update_script_widgets(self):
+        # 
         if len(self.scripts) == 0:
-            self.scripts = [ScriptWidget(self)]
+            self.scripts = [InsertWidget(self)]
+            return
 
         id = 1
         for i,s in enumerate(self.scripts):
-            s.position = i
-            if s.state != 'ended' and s.state != None:
-                # We passed all the ended scripts
-                if id==1:
-                    self.position_0 = i
-                    # topmost non-run scipt
-                    # if was just move there, we should
-                    # adjust its state
-                    if self.state == 'running':
-                        s.run()
-                    elif self.state == 'stopped':
-                        s.stop()
 
-                    # give zero and negative ids to all the ended scripts
-                    neg_id = 0
-                    for position in range(i-1,-1,-1):
-                        self.scripts[position].id = neg_id
-                        neg_id -= 1
+            s.position = i
+            s.id = None
+
+            if s.state in ['running', 'stopped', 'queued'] or id>1:
+                
+                if id==1:
+                    # First script to run / running
+                    self.position_0 = i
+
+                    # This should one should be either running
+                    # or stopped
+                    if self.state == 'running':
+                        s.state = 'running'
+                    elif self.state == 'stopped':
+                        s.state = 'stopped'
 
                 elif id>1:
                     # scripts lower down the queue:
                     # if they were just moved, we should
                     # adjust their state
-                    s.queue()
+                    s.state = 'queued'
 
                 s.id = id
                 id+=1
-
 
         for i,s in enumerate(self.scripts):
             s.grid(row=i, column=0, sticky='news')
@@ -386,39 +389,39 @@ class BatchingFrame(tk.Canvas):
         self.frame.rowconfigure(0, weight=1)  # make canvas expandable in x
         self.frame.columnconfigure(0, weight=1)  # make canvas expandable in y
 
-    def build_menubar(self):
-        """
-        Builds the File, Edit, ... menu bar situated at the top of
-        the window.
-        """
+    # def build_menubar(self):
+    #     """
+    #     Builds the File, Edit, ... menu bar situated at the top of
+    #     the window.
+    #     """
 
-        # initialize the menubar object
-        self.menubar = tk.Menu(self.frame)
+    #     # initialize the menubar object
+    #     self.menubar = tk.Menu(self.frame)
 
-        ####################################
-        # FILE cascade menu build
-        ####################################
+    #     ####################################
+    #     # FILE cascade menu build
+    #     ####################################
 
-        # add new item to the menubar
-        menu = tk.Menu(self.menubar, tearoff=0)
-        self.menubar.add_cascade(label="File", menu=menu)
+    #     # add new item to the menubar
+    #     menu = tk.Menu(self.menubar, tearoff=0)
+    #     self.menubar.add_cascade(label="File", menu=menu)
 
-        ####################################
-        # VIEW cascade menu build
-        ####################################
+    #     ####################################
+    #     # VIEW cascade menu build
+    #     ####################################
 
-        # add new item to the menubar
-        menu = tk.Menu(self.menubar, tearoff=0)
-        self.menubar.add_cascade(label="View", menu=menu)
+    #     # add new item to the menubar
+    #     menu = tk.Menu(self.menubar, tearoff=0)
+    #     self.menubar.add_cascade(label="View", menu=menu)
 
-        # add cascade menu items
-        menu.add_command(
-            label="Output",
-            command=self.build_output_window)
+    #     # add cascade menu items
+    #     menu.add_command(
+    #         label="Output",
+    #         command=self.build_output_window)
 
 
-        # Add the menubar to the application
-        self.master.config(menu=self.menubar)
+    #     # Add the menubar to the application
+    #     self.master.config(menu=self.menubar)
 
     def build_scrollbars(self):
         """
@@ -502,6 +505,7 @@ class BatchingFrame(tk.Canvas):
         self.config(scrollregion=self.bbox("all"))
 
 class ScriptWidget(ttk.Frame):
+
     def __init__(self, parent, script_path = None, state = None, success = None):
         super(ScriptWidget, self).__init__(parent.canvas_content)
         self.parent = parent
@@ -515,15 +519,25 @@ class ScriptWidget(ttk.Frame):
         self.width_number_text = 2
         self.width_state_text = 10
 
+    def next_script_state(self):
+        try:
+            return self.parent.scripts[self.position+1].state
+        except IndexError:
+            # This script is last in line
+            return None
+
 
     def add_widgets(self):
 
+        if self.next_script_state() in ['stopped', 'queued',None]:
+            b = ImageButton(self,image = 'insert.gif', 
+                command = (lambda: self.parent.insert(self.position)))
+        else:
+            b = ImageButton(self,image = 'half_blank.gif')
+            b.config(state=tk.DISABLED)
+        b.grid(row=0, column=0, sticky='swe', padx = (5,0))
 
-        if self.state == None:
-            b = ImageButton(self,image = 'insert.gif', command = self.insert)
-            b.grid(row=0, column=0, sticky='swe', padx = (5,0))
-            self.columnconfigure(7, weight=1)
-            return
+
 
         if self.state == 'ended':
             l = ttk.Label(self,text = '', width= self.width_number_text)
@@ -538,21 +552,6 @@ class ScriptWidget(ttk.Frame):
         else:
             b = ttk.Label(self,text = self.state, width= self.width_state_text, anchor="center")
         b.grid(row=0, column=5, sticky='news')
-
-        try:
-            next_script_state = self.parent.scripts[self.position+1].state
-        except IndexError:
-            # This script is last in line
-            next_script_state = None
-
-        if (self.state == 'ended' and next_script_state == 'ended' and self.parent.state == 'stopped')\
-                 or (self.state == 'ended' and self.parent.state == 'running'):
-            b = ImageButton(self,image = 'half_blank.gif')
-            b.config(state=tk.DISABLED)
-        else:
-            b = ImageButton(self,image = 'insert.gif', 
-                command = (lambda: self.parent.insert(self.position)))
-        b.grid(row=0, column=0, sticky='swe', padx = (5,0))
 
         if self.state == 'running':
             b = ImageButton(self,image = 'blank.gif')
@@ -572,7 +571,7 @@ class ScriptWidget(ttk.Frame):
 
         if self.state == 'running':
             b = ImageButton(self,image = 'stop.gif', 
-            command = (lambda: self.parent.stop(self.position)))
+            command = self.parent.stop)
         elif self.state == 'stopped':
             b = ImageButton(self,image = 'run.gif',
                 command = (lambda: self.parent.run(self.position)))
@@ -581,18 +580,32 @@ class ScriptWidget(ttk.Frame):
             b.config(state=tk.DISABLED)
         b.grid(row=0, column=4, sticky='news', pady=self.pady)
         
-        if self.state == 'ended':
 
+        
+        b_script = ttk.Button(self,text = self.script_path,
+            command = self.open_script)
+
+        if self.state == 'ended':
             b = ttk.Button(self,text = "view log", command = self.view_log)
             b.grid(row=0, column=6, sticky='nes', pady=self.pady)
-            
-            b = ttk.Button(self,text = self.script_path,compound = 'left')
-            b.grid(row=0, column=7, sticky='news', pady=self.pady, padx = (0,40))
+            b_script.grid(row=0, column=7, sticky='news', pady=self.pady, padx = (0,40))
+        if self.state in ['running','stopped']:
+            b = ttk.Button(self,text = "view output", command = self.parent.build_output_window)
+            b.grid(row=0, column=6, sticky='nes', pady=self.pady)
+            b_script.grid(row=0, column=7, sticky='news', pady=self.pady, padx = (0,40))
         else:
-            b = ttk.Button(self,text = self.script_path)
-            b.grid(row=0, column=6,columnspan=2, sticky='news', pady=self.pady, padx = (0,40))
+            b_script.grid(row=0, column=6,columnspan=2, sticky='news', pady=self.pady, padx = (0,40))
         
         self.columnconfigure(7, weight=1)
+
+    def open_script(self):
+
+        try:
+            subprocess.Popen(['open',self.script_path])
+        except FileNotFoundError:
+            messagebox.showerror('File not found', 'File not found at address \n%s'%self.script_path)
+        except Exception as e:
+            messagebox.showerror('Error', 'Error trying to open file\n%s\n%s'(self.script_path,str(e)))
 
     def view_log(self):
 
@@ -606,28 +619,28 @@ class ScriptWidget(ttk.Frame):
         self.log_text_widget = ScrolledLabel(self.log_window)
         self.log_text_widget.grid(column = 0, row=0, sticky = 'news')
         self.log_text_widget.insert(self.log)
+        self.log_text_widget.see("end")
         self.log_window.rowconfigure(0, weight=1)
         self.log_window.columnconfigure(0, weight=1)
 
-    def queue(self):
-        self.state = 'queued'
-        self.add_widgets()
 
-    def end(self, success):
+class InsertWidget(ScriptWidget):
+    '''Like Script Widget, but with just one insert button
+    It's always the topmost widget
+    '''
+    def __init__(self, parent, script_path = None, state = None, success = None):
+        super(InsertWidget, self).__init__(parent, script_path = None, state = None, success = None)
 
-        self.success = success
-        self.state = 'ended'
-        self.add_widgets()
+    def add_widgets(self):
 
-    def run(self):
+        if self.next_script_state() in ['stopped','queued', None]:
+            b = ImageButton(self,image = 'insert.gif', 
+                command = (lambda: self.parent.insert(self.position)))
+        else:
+            b = ImageButton(self,image = 'half_blank.gif')
+            b.config(state=tk.DISABLED)
+        b.grid(row=0, column=0, sticky='swe', padx = (5,0))
 
-        self.state = 'running'
-        self.log = ''
-        self.add_widgets()
-
-    def stop(self):
-        self.state = 'stopped'
-        self.add_widgets()
 
 
 
