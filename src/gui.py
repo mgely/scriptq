@@ -96,7 +96,6 @@ class BatchingFrame(tk.Canvas):
         # Custom opening screen for debugging
         self.scripts = [
             InsertWidget(self),
-            ScriptWidget(self, script_path = 'test' , state = 'ready')
             ]
 
         self.update_script_widgets()
@@ -207,13 +206,12 @@ class BatchingFrame(tk.Canvas):
         self.running_script_position = position
         self.running_script.log = ''
 
+        # Delete the contents of the output window
+        self.output_text_widget.clear()
+
         # Start the script and setup the communication
         # with subprocess
         self.start_script_process(script_path)
-
-        # Delete the contents of the output window
-        if self.output_window_visible:
-            self.output_text_widget.delete("1.0","end")
 
         # Start the periodic monitoring of the script, 
         # to capture the output, but also detect the end/error
@@ -719,6 +717,11 @@ class ScrolledLabel(scrolledtext.ScrolledText):
     def insert(self, text):
         self.configure(state='normal')
         super(ScrolledLabel, self).insert(tk.INSERT, text)
+        self.configure(state='disabled')
+
+    def clear(self):
+        self.configure(state='normal')
+        self.delete("1.0","end")
         self.configure(state='disabled')
 
 def reader(f,buffer):
