@@ -18,7 +18,7 @@ class GuiWindow(ttk.Frame):
         self.master.title("Script queuer")
 
         # Set the initial size of the window in pixels
-        self.master.geometry("800x400")
+        self.master.geometry("1000x400")
 
         self.master.resizable(False, True)
 
@@ -83,7 +83,7 @@ class BatchingFrame(tk.Canvas):
         self.create_window((0, 0), 
             window=self.canvas_content, 
             anchor='nw', 
-            width = 800)
+            width = 1000)
         self.master.columnconfigure(0, weight=1)
         self.columnconfigure(0, weight=1)
         self.canvas_content.columnconfigure(0, weight=1)
@@ -615,11 +615,8 @@ class ScriptWidget(tk.Frame):
         self.all_widgets.append(b)
         b.grid(row=0, column=6, sticky='ne', pady=self.pady, padx=(2,10))
         
-        b = tk.Button(self,text = self.script_path,
-            borderwidth = 0,
+        b = tk.Label(self,text = self.script_path,
             anchor = tk.W,
-            cursor= 'hand2',
-            # command = self.open_script
             )
         b.grid(row=0, column=7,columnspan=1, sticky='new', pady=self.pady, padx = (0,40))
         self.columnconfigure(7, weight=1)
