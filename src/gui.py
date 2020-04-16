@@ -229,6 +229,7 @@ class BatchingFrame(tk.Canvas):
 
         # Start the script subprocess
         self.script_process = subprocess.Popen(['python','-u',script],
+            cwd = path.dirname(script),
             stdout = subprocess.PIPE,
             stderr = subprocess.PIPE, 
             bufsize=1)
