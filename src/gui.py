@@ -64,15 +64,18 @@ class BatchingFrame(tk.Canvas):
     def __init__(self,master,**kwargs):
         self.master = master
         self.latest_searched_directory = None
+        self.running_script = None
 
         self.build_gridframe()
         self.build_menubar()
         self.build_scrollbars()
         self.build_canvas()
         self.configure_scrollbars()
+
+        self.output_window_visible = False
         self.build_output_window()
 
-        self.t_output_window_update = 100 #ms
+        self.t_output_monitoring = 100 #ms
         self.bind("<MouseWheel>", self.scroll_y_wheel)
 
         self.canvas_content = tk.Frame(self)
@@ -103,14 +106,25 @@ class BatchingFrame(tk.Canvas):
 
         self.update()
         self.config(scrollregion=self.bbox("all"))
+
+
     
     def build_output_window(self):
+        if self.output_window_visible:
+            # Has already been built
+            self.output_window.lift()
+            self.output_window.attributes("-topmost", True)
+            self.output_window.attributes("-topmost", False)
+            return
+
+        self.output_window_visible = True
 
         # Open up the output window
         self.output_window = tk.Toplevel(self.master)
         self.output_window.title("Script queuer | Output")   
         self.output_window.geometry("400x400")
         self.output_window.minsize(200,150)
+        self.output_window.protocol("WM_DELETE_WINDOW", self.on_closing_output_window)
 
         # Put a scrollable text region in it
         self.output_text_widget = ScrolledLabel(self.output_window)
@@ -122,6 +136,14 @@ class BatchingFrame(tk.Canvas):
         b = ToggleFollowButton(self.output_window, 
           text='Autoscroll')
         b.grid(column = 0,row=1, sticky = 'nws')
+
+        if self.running_script is not None:
+            self.output_text_widget.insert(self.running_script.log)
+            self.output_text_widget.see("end")
+
+    def on_closing_output_window(self):
+        self.output_window_visible = False
+        self.output_window.destroy()
 
     def insert(self, position):
 
@@ -187,12 +209,13 @@ class BatchingFrame(tk.Canvas):
         self.start_script_process(self.scripts[position].script_path)
 
         # Delete the contents of the output window
-        self.output_text_widget.delete("1.0","end")
+        if self.output_window_visible:
+            self.output_text_widget.delete("1.0","end")
 
         # Start the periodic monitoring of the script, 
         # to capture the output, but also detect the end/error
         self.after(
-                self.t_output_window_update, 
+                self.t_output_monitoring, 
                 self.manage_script_process)
 
         self.state = 'running'
@@ -221,7 +244,8 @@ class BatchingFrame(tk.Canvas):
         self.buffer_filling_thread.start()
 
     def write_to_output(self, to_write):
-        self.output_text_widget.insert(to_write)
+        if self.output_window_visible:
+            self.output_text_widget.insert(to_write)
         self.running_script.log += to_write
 
     def manage_script_process(self):
@@ -229,7 +253,7 @@ class BatchingFrame(tk.Canvas):
         while self.line_buffer:
             self.write_to_output(self.line_buffer.pop(0).decode("utf-8"))
 
-        if self.output_window.follow:
+        if self.output_window.follow and self.output_window_visible:
             self.output_text_widget.see("end")
 
         poll =self.script_process.poll()
@@ -247,11 +271,13 @@ class BatchingFrame(tk.Canvas):
                         break
                     else:
                         self.write_to_output(line.decode("utf-8"))
-                self.output_text_widget.see("end")
+                if self.output_window_visible:
+                    self.output_text_widget.see("end")
 
                 if self.state == 'stopped':
                     self.write_to_output('INTERRUPTED BY SCRIPT QUEUER')
-                    self.output_text_widget.see("end")
+                    if self.output_window_visible:
+                        self.output_text_widget.see("end")
 
 
             if poll==1 and self.state == 'stopped':
@@ -287,7 +313,7 @@ class BatchingFrame(tk.Canvas):
 
         else:   
             self.after(
-                self.t_output_window_update, 
+                self.t_output_monitoring, 
                 self.manage_script_process)
 
 
@@ -364,26 +390,10 @@ class BatchingFrame(tk.Canvas):
         """
         Builds the File, Edit, ... menu bar situated at the top of
         the window.
-
-        All these menu actions generate a keystroke which is bound to
-        a function. In this way, when we are tracking the users actions,
-        clicking a button can be easily stored as a keystroke.
         """
 
         # initialize the menubar object
         self.menubar = tk.Menu(self.frame)
-        ####################################
-        # Define the label formatting
-        ####################################
-
-        # File, Edit, ... are defined to have a width of 6 characters
-        menu_label_template = "{:<6}"
-
-        # The items appearing in the cascade menu that appears when
-        # clicking on File for example will have 15 characters width on the
-        # left where the name of the functionality is provided and
-        # 15 characters on the right where the keyboard shortcut is provided
-        label_template = "{:<15}{:>15}"
 
         ####################################
         # FILE cascade menu build
@@ -391,13 +401,20 @@ class BatchingFrame(tk.Canvas):
 
         # add new item to the menubar
         menu = tk.Menu(self.menubar, tearoff=0)
-        self.menubar.add_cascade(label=menu_label_template.format("File"), menu=menu)
+        self.menubar.add_cascade(label="File", menu=menu)
+
+        ####################################
+        # VIEW cascade menu build
+        ####################################
+
+        # add new item to the menubar
+        menu = tk.Menu(self.menubar, tearoff=0)
+        self.menubar.add_cascade(label="View", menu=menu)
 
         # add cascade menu items
         menu.add_command(
-            label=label_template.format("Exit", "Ctrl+Q"),
-            command=(lambda: self.event_generate("<Control-q>"))
-        )
+            label="Output",
+            command=self.build_output_window)
 
 
         # Add the menubar to the application
@@ -503,7 +520,6 @@ class ScriptWidget(ttk.Frame):
 
 
         if self.state == None:
-            # ttk.Separator(self, orient=tk.HORIZONTAL).grid(column=0, row=0, columnspan=10, sticky='swe', pady=10)
             b = ImageButton(self,image = 'insert.gif', command = self.insert)
             b.grid(row=0, column=0, sticky='swe', padx = (5,0))
             self.columnconfigure(7, weight=1)
@@ -523,9 +539,6 @@ class ScriptWidget(ttk.Frame):
             b = ttk.Label(self,text = self.state, width= self.width_state_text, anchor="center")
         b.grid(row=0, column=5, sticky='news')
 
-        # ttk.Separator(self, orient=tk.VERTICAL).grid(column=1, row=0, rowspan=1, sticky='nse')
-        # ttk.Separator(self, orient=tk.HORIZONTAL).grid(column=0, row=0, columnspan=10, sticky='swe', pady=10)
-
         try:
             next_script_state = self.parent.scripts[self.position+1].state
         except IndexError:
@@ -541,9 +554,12 @@ class ScriptWidget(ttk.Frame):
                 command = (lambda: self.parent.insert(self.position)))
         b.grid(row=0, column=0, sticky='swe', padx = (5,0))
 
-
-        b = ImageButton(self,image = 'remove.gif', 
-            command = (lambda: self.parent.remove(self.position)))
+        if self.state == 'running':
+            b = ImageButton(self,image = 'blank.gif')
+            b.config(state=tk.DISABLED)
+        else:
+            b = ImageButton(self,image = 'remove.gif', 
+                command = (lambda: self.parent.remove(self.position)))
         b.grid(row=0, column=2, sticky='news', pady=self.pady)
 
         if self.state in ['queued','stopped'] :
