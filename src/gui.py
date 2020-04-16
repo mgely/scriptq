@@ -5,7 +5,9 @@ from tkinter import ttk
 import subprocess
 from threading import Thread 
 import time
+import tempfile
 from os import path
+import sys
 
 class GuiWindow(ttk.Frame):
     def __init__(self):
@@ -16,7 +18,7 @@ class GuiWindow(ttk.Frame):
         self.master.title("Script queuer")
 
         # Set the initial size of the window in pixels
-        self.master.geometry("800x600")
+        self.master.geometry("800x400")
 
         self.master.resizable(False, True)
 
@@ -68,6 +70,7 @@ class BatchingFrame(tk.Canvas):
         self.build_scrollbars()
         self.build_canvas()
         self.configure_scrollbars()
+        self.build_output_window()
 
         self.t_output_window_update = 100 #ms
         self.bind("<MouseWheel>", self.scroll_y_wheel)
@@ -100,7 +103,25 @@ class BatchingFrame(tk.Canvas):
 
         self.update()
         self.config(scrollregion=self.bbox("all"))
-        
+    
+    def build_output_window(self):
+
+        # Open up the output window
+        self.output_window = tk.Toplevel(self.master)
+        self.output_window.title("Script queuer | Output")   
+        self.output_window.geometry("400x400")
+        self.output_window.minsize(200,150)
+
+        # Put a scrollable text region in it
+        self.output_text_widget = ScrolledLabel(self.output_window)
+        self.output_text_widget.grid(column = 0, row=0, sticky = 'news')
+        self.output_window.rowconfigure(0, weight=1)
+        self.output_window.columnconfigure(0, weight=1)
+
+        # Add a button to toggle following the output
+        b = ToggleFollowButton(self.output_window, 
+          text='Autoscroll')
+        b.grid(column = 0,row=1, sticky = 'nws')
 
     def insert(self, position):
 
@@ -158,7 +179,21 @@ class BatchingFrame(tk.Canvas):
 
     def run(self, position):
 
+        self.running_script = self.scripts[position]
+        self.running_script_position = position
+
+        # Start the script and setup the communication
+        # with subprocess
         self.start_script_process(self.scripts[position].script_path)
+
+        # Delete the contents of the output window
+        self.output_text_widget.delete("1.0","end")
+
+        # Start the periodic monitoring of the script, 
+        # to capture the output, but also detect the end/error
+        self.after(
+                self.t_output_window_update, 
+                self.manage_script_process)
 
         self.state = 'running'
         self.scripts[position].run()
@@ -166,31 +201,11 @@ class BatchingFrame(tk.Canvas):
 
     def start_script_process(self, script):
 
-        # Open up the output window
-        self.output_window = tk.Toplevel(self.master)
-        self.output_window.title("Output | Script queuer")   
-        self.output_window.geometry("400x400")
-        self.output_window.minsize(200,150)
-
-        # Put a scrollable text region in it
-        self.output_text_widget = scrolledtext.ScrolledText(self.output_window)
-        self.output_text_widget.grid(column = 0, row=0, sticky = 'news')
-        self.output_window.rowconfigure(0, weight=1)
-        self.output_window.columnconfigure(0, weight=1)
-
-        # Add a button to toggle following the output
-        b = ToggleFollowButton(self.output_window, 
-          text='Autoscroll')
-        b.grid(column = 0,row=1, sticky = 'nws')
-
-
         # Start the script subprocess
         self.script_process = subprocess.Popen(['python','-u','test.py'],
             stdout = subprocess.PIPE,
             stderr = subprocess.PIPE, 
-            bufsize=1,
-            shell=True
-            )
+            bufsize=1)
         self.line_buffer = []
         '''
         Populated with contents of process
@@ -205,50 +220,67 @@ class BatchingFrame(tk.Canvas):
         self.buffer_filling_thread.daemon=True
         self.buffer_filling_thread.start()
 
-
-        self.after(
-                self.t_output_window_update, 
-                self.manage_script_process)
+    def write_to_output(self, to_write):
+        self.output_text_widget.insert(to_write)
+        self.running_script.log += to_write
 
     def manage_script_process(self):
 
         while self.line_buffer:
-            self.output_text_widget.insert(tk.INSERT,self.line_buffer.pop(0))
-        # self.output_text_widget.insert(tk.INSERT,self.script_process.stdout.readline())
+            self.write_to_output(self.line_buffer.pop(0).decode("utf-8"))
 
         if self.output_window.follow:
             self.output_text_widget.see("end")
 
         poll =self.script_process.poll()
-        if poll == 0:
-            print('success')
-        elif poll == 1:
-            print('failure')
-            while True:
-                line = self.script_process.stderr.readline()
-                if not line:
-                    break
-                else:
-                    self.output_text_widget.insert(tk.INSERT,line)
-            self.output_text_widget.see("end")
-        else:
+        if poll in [0,1]:
+            if poll == 0:
+                pass
+                # Successfully finished script
+            elif poll == 1:
+                # Something went wrong
+
+                # Get Error Log
+                while True:
+                    line = self.script_process.stderr.readline()
+                    if not line:
+                        break
+                    else:
+                        self.write_to_output(line.decode("utf-8"))
+                self.output_text_widget.see("end")
+
+                if self.state == 'stopped':
+                    self.write_to_output('INTERRUPTED BY SCRIPT QUEUER')
+                    self.output_text_widget.see("end")
+
+
+            if poll==1 and self.state == 'stopped':
+                # User interrupted the script
+
+                self.running_script.stop()
+
+                stopped = self.running_script
+                duplicate = ScriptWidget(self, 
+                    script_path = stopped.script_path, 
+                    state = 'done')
+                duplicate.success = 'stopped'
+                duplicate.log = stopped.log
+
+                self.scripts.insert(self.running_script_position, duplicate)
+                self.update_script_widgets()
+
+        else:   
             self.after(
                 self.t_output_window_update, 
                 self.manage_script_process)
 
+
+
     def stop(self, position):
         self.state = 'stopped'
-        self.scripts[position].stop()
 
-        stopped = self.scripts[position]
-        duplicate = ScriptWidget(self, 
-            script_path = stopped.script_path, 
-            state = 'done')
-        duplicate.log_path = stopped.log_path
-        duplicate.success = 'stopped'
-
-        self.scripts.insert(position, duplicate)
-        self.update_script_widgets()
+        # Interrupt process
+        self.script_process.kill()
 
     def update_script_widgets(self):
         if len(self.scripts) == 0:
@@ -442,7 +474,6 @@ class ScriptWidget(ttk.Frame):
         self.parent = parent
         self.state = state
         self.script_path = script_path
-        self.log_path = ''
         self.id = None 
         self.position = None
         self.success = success
@@ -513,7 +544,7 @@ class ScriptWidget(ttk.Frame):
         
         if self.state == 'done':
 
-            b = ttk.Button(self,text = "view log")
+            b = ttk.Button(self,text = "view log", command = self.view_log)
             b.grid(row=0, column=6, sticky='nes', pady=self.pady)
             
             b = ttk.Button(self,text = self.script_path,compound = 'left')
@@ -524,6 +555,20 @@ class ScriptWidget(ttk.Frame):
         
         self.columnconfigure(7, weight=1)
 
+    def view_log(self):
+
+        # Open up the output window
+        self.log_window = tk.Toplevel(self.parent.master)
+        self.log_window.title("Script queuer | Log | "+self.script_path)   
+        self.log_window.geometry("400x400")
+        self.log_window.minsize(200,150)
+
+        # Put a scrollable text region in it
+        self.log_text_widget = ScrolledLabel(self.log_window)
+        self.log_text_widget.grid(column = 0, row=0, sticky = 'news')
+        self.log_text_widget.insert(self.log)
+        self.log_window.rowconfigure(0, weight=1)
+        self.log_window.columnconfigure(0, weight=1)
 
     def queue(self):
         self.state = 'queued'
@@ -538,6 +583,7 @@ class ScriptWidget(ttk.Frame):
     def run(self):
 
         self.state = 'running'
+        self.log = ''
         self.add_widgets()
 
 
@@ -573,7 +619,17 @@ class ToggleFollowButton(tk.Radiobutton):
             self.config(value = True)   
             self.state.set(True)    
             self.parent.follow = True
-        
+
+class ScrolledLabel(scrolledtext.ScrolledText):
+    """docstring for ScrolledLabel"""
+    def __init__(self, *args, **kwargs):
+        super(ScrolledLabel, self).__init__(*args, **kwargs)
+
+    def insert(self, text):
+        self.configure(state='normal')
+        super(ScrolledLabel, self).insert(tk.INSERT, text)
+        self.configure(state='disabled')
+
 def reader(f,buffer):
     '''Utility function runing in a thread
     which transfers any lines from f into a buffer
