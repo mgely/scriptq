@@ -91,8 +91,8 @@ class BatchingFrame(tk.Canvas):
 
         # Custom opening screen for debugging
         self.scripts = [
-            ScriptWidget(self, script_path = '-2', state = 'done', success = 'failed'),
-            ScriptWidget(self, script_path = '-1', state = 'done', success = 'done'),
+            ScriptWidget(self, script_path = '-2', state = 'ended', success = 'failed'),
+            ScriptWidget(self, script_path = '-1', state = 'ended', success = 'done'),
             ScriptWidget(self, script_path = '1', state = 'queued'),
             ScriptWidget(self, script_path = '2', state = 'queued')
             ]
@@ -262,12 +262,28 @@ class BatchingFrame(tk.Canvas):
                 stopped = self.running_script
                 duplicate = ScriptWidget(self, 
                     script_path = stopped.script_path, 
-                    state = 'done')
+                    state = 'ended')
                 duplicate.success = 'stopped'
                 duplicate.log = stopped.log
 
                 self.scripts.insert(self.running_script_position, duplicate)
                 self.update_script_widgets()
+
+            else:
+                if poll==1:
+                    # Script stopped because of an error
+                    self.running_script.end(success = 'failed')
+                elif poll==0:
+                    # Script successfully ended
+                    self.running_script.end(success = 'done')
+                
+
+                if self.running_script_position+1<len(self.scripts):
+                    # more scripts are queued
+                    self.run(position = self.running_script_position+1)
+                else:
+                    # no more scripts to be run, update visual information
+                    self.update_script_widgets()
 
         else:   
             self.after(
@@ -289,8 +305,8 @@ class BatchingFrame(tk.Canvas):
         id = 1
         for i,s in enumerate(self.scripts):
             s.position = i
-            if s.state != 'done' and s.state != None:
-                # We passed all the done scripts
+            if s.state != 'ended' and s.state != None:
+                # We passed all the ended scripts
                 if id==1:
                     self.position_0 = i
                     # topmost non-run scipt
@@ -301,7 +317,7 @@ class BatchingFrame(tk.Canvas):
                     elif self.state == 'stopped':
                         s.stop()
 
-                    # give zero and negative ids to all the done scripts
+                    # give zero and negative ids to all the ended scripts
                     neg_id = 0
                     for position in range(i-1,-1,-1):
                         self.scripts[position].id = neg_id
@@ -313,7 +329,7 @@ class BatchingFrame(tk.Canvas):
                     # adjust their state
                     s.queue()
 
-                s.id = str(id)
+                s.id = id
                 id+=1
 
 
@@ -493,13 +509,13 @@ class ScriptWidget(ttk.Frame):
             self.columnconfigure(7, weight=1)
             return
 
-        if self.state == 'done':
+        if self.state == 'ended':
             l = ttk.Label(self,text = '', width= self.width_number_text)
         else:
             l = ttk.Label(self,text = self.id, width= self.width_number_text, anchor="center")
         l.grid(row=0, column=1,sticky='news')
 
-        if self.state == 'done':
+        if self.state == 'ended':
             b = ttk.Label(self,text = self.success, width= self.width_state_text, anchor="center")
         elif self.state == 'stopped':
             b = ttk.Label(self,text = 'ready', width= self.width_state_text, anchor="center", background="green")
@@ -510,7 +526,14 @@ class ScriptWidget(ttk.Frame):
         # ttk.Separator(self, orient=tk.VERTICAL).grid(column=1, row=0, rowspan=1, sticky='nse')
         # ttk.Separator(self, orient=tk.HORIZONTAL).grid(column=0, row=0, columnspan=10, sticky='swe', pady=10)
 
-        if self.state == 'done' and self.id<0:
+        try:
+            next_script_state = self.parent.scripts[self.position+1].state
+        except IndexError:
+            # This script is last in line
+            next_script_state = None
+
+        if (self.state == 'ended' and next_script_state == 'ended' and self.parent.state == 'stopped')\
+                 or (self.state == 'ended' and self.parent.state == 'running'):
             b = ImageButton(self,image = 'half_blank.gif')
             b.config(state=tk.DISABLED)
         else:
@@ -542,7 +565,7 @@ class ScriptWidget(ttk.Frame):
             b.config(state=tk.DISABLED)
         b.grid(row=0, column=4, sticky='news', pady=self.pady)
         
-        if self.state == 'done':
+        if self.state == 'ended':
 
             b = ttk.Button(self,text = "view log", command = self.view_log)
             b.grid(row=0, column=6, sticky='nes', pady=self.pady)
@@ -574,10 +597,10 @@ class ScriptWidget(ttk.Frame):
         self.state = 'queued'
         self.add_widgets()
 
-    def done(self, success):
+    def end(self, success):
 
         self.success = success
-        self.state = 'done'
+        self.state = 'ended'
         self.add_widgets()
 
     def run(self):
@@ -585,7 +608,6 @@ class ScriptWidget(ttk.Frame):
         self.state = 'running'
         self.log = ''
         self.add_widgets()
-
 
     def stop(self):
         self.state = 'stopped'
