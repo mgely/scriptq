@@ -9,8 +9,10 @@ import tempfile
 from os import path
 import sys
 
+graphics_directory = path.join(path.dirname(__file__), "graphics")
+
 class GuiWindow(ttk.Frame):
-    def __init__(self):
+    def __init__(self, unittesting = False):
         # Initialize the frame, inside the root window (tk.Tk())
         ttk.Frame.__init__(self, master=tk.Tk())
 
@@ -51,12 +53,15 @@ class GuiWindow(ttk.Frame):
         self.master.attributes("-topmost", True)
         self.master.attributes("-topmost", False)
         
-        try:
-            self.mainloop()
-        except UnicodeDecodeError:
-            messagebox.showinfo(
-                "Oops.. The GUI crashed.\n\n"
-            )
+        if unittesting:
+            self.update()
+        else:
+            try:
+                self.mainloop()
+            except UnicodeDecodeError:
+                messagebox.showinfo(
+                    "Oops.. The GUI crashed.\n\n"
+                )
 
 
 
@@ -90,6 +95,8 @@ class BatchingFrame(tk.Canvas):
 
         self.state = 'stopped' # other option: 'running'
 
+        self.interrupted_error_message = 'INTERRUPTED BY SCRIPT QUEUER'
+
         # # Default opening screen
         # self.scripts = []
 
@@ -102,6 +109,10 @@ class BatchingFrame(tk.Canvas):
 
         self.update()
         self.config(scrollregion=self.bbox("all"))
+
+    def remove_all(self):
+        for position in range(len(self.scripts)-1,0,-1):
+            self.remove(position)
 
     def build_output_window(self):
         if self.output_window_visible:
@@ -139,28 +150,25 @@ class BatchingFrame(tk.Canvas):
         self.output_window_visible = False
         self.output_window.destroy()
 
-    def insert(self, position):
+    def insert(self, position, script_path = None):
 
-        # Prompt user for file name
-        if self.latest_searched_directory == None:
-            script_path = filedialog.askopenfilename()
-        else:
-            script_path = filedialog.askopenfilename(initialdir=self.latest_searched_directory)
-
-        
-
-        if script_path == "":
-            # User cancelled
-            return
-
-        self.latest_searched_directory = path.dirname(script_path)
+        if script_path is None:
+            # Prompt user for file name
+            if self.latest_searched_directory == None:
+                script_path = filedialog.askopenfilename()
+            else:
+                script_path = filedialog.askopenfilename(initialdir=self.latest_searched_directory)
+            if script_path == "":
+                # User cancelled
+                return
+            self.latest_searched_directory = path.dirname(script_path)
 
         sw = ScriptWidget(self, script_path = script_path, state = 'queued')
 
         self.scripts.insert(position+1,sw)
         self.update_script_widgets()
 
-    def move(self, position):
+    def move(self, position, new_position = None):
         if self.state == 'running':
             message = " 1 = place below row 1\n etc...\n-1 = place at end"
             minvalue = 0
@@ -168,12 +176,14 @@ class BatchingFrame(tk.Canvas):
             message = " 0 = place first \n 1 = place below row 1\n etc...\n-1 = place at end"
             minvalue = -1
 
-        new_position = tk.simpledialog.askinteger("Move to", message,
-                                parent=self.master,
-                                 minvalue=minvalue, maxvalue=len(self.scripts))
         if new_position is None:
-            # User cancelled
-            return
+            new_position = tk.simpledialog.askinteger("Move to", message,
+                                    parent=self.master,
+                                     minvalue=minvalue, maxvalue=len(self.scripts))
+            if new_position is None:
+                # User cancelled
+                return
+
         elif new_position == -1:
             new_position = len(self.scripts)
         else:
@@ -197,7 +207,7 @@ class BatchingFrame(tk.Canvas):
 
         script_path = self.scripts[position].script_path
 
-        # Check if the script is a valid file
+        # # Check if the script is a valid file
         # if not path.exists(script_path):
         #     messagebox.showerror('File not found', 'File not found at path %s'%script_path)
         #     return
@@ -284,7 +294,7 @@ class BatchingFrame(tk.Canvas):
                     self.output_text_widget.see("end")
 
                 if self.state == 'stopped':
-                    self.write_to_output('INTERRUPTED BY SCRIPT QUEUER')
+                    self.write_to_output(self.interrupted_error_message)
                     if self.output_window_visible:
                         self.output_text_widget.see("end")
 
@@ -323,7 +333,6 @@ class BatchingFrame(tk.Canvas):
                     # no more scripts to be run, update visual information
                     self.state = 'stopped'
                     self.update_script_widgets()
-
 
     def stop(self):
         self.state = 'stopped'
@@ -392,39 +401,39 @@ class BatchingFrame(tk.Canvas):
         self.frame.rowconfigure(0, weight=1)  # make canvas expandable in x
         self.frame.columnconfigure(0, weight=1)  # make canvas expandable in y
 
-    # def build_menubar(self):
-    #     """
-    #     Builds the File, Edit, ... menu bar situated at the top of
-    #     the window.
-    #     """
+    def build_menubar(self):
+        """
+        Builds the File, Edit, ... menu bar situated at the top of
+        the window.
+        """
 
-    #     # initialize the menubar object
-    #     self.menubar = tk.Menu(self.frame)
+        # initialize the menubar object
+        self.menubar = tk.Menu(self.frame)
 
-    #     ####################################
-    #     # FILE cascade menu build
-    #     ####################################
+        ####################################
+        # FILE cascade menu build
+        ####################################
 
-    #     # add new item to the menubar
-    #     menu = tk.Menu(self.menubar, tearoff=0)
-    #     self.menubar.add_cascade(label="File", menu=menu)
+        # add new item to the menubar
+        menu = tk.Menu(self.menubar, tearoff=0)
+        self.menubar.add_cascade(label="File", menu=menu)
 
-    #     ####################################
-    #     # VIEW cascade menu build
-    #     ####################################
+        ####################################
+        # VIEW cascade menu build
+        ####################################
 
-    #     # add new item to the menubar
-    #     menu = tk.Menu(self.menubar, tearoff=0)
-    #     self.menubar.add_cascade(label="View", menu=menu)
+        # add new item to the menubar
+        menu = tk.Menu(self.menubar, tearoff=0)
+        self.menubar.add_cascade(label="View", menu=menu)
 
-    #     # add cascade menu items
-    #     menu.add_command(
-    #         label="Output",
-    #         command=self.build_output_window)
+        # add cascade menu items
+        menu.add_command(
+            label="Output",
+            command=self.build_output_window)
 
 
-    #     # Add the menubar to the application
-    #     self.master.config(menu=self.menubar)
+        # Add the menubar to the application
+        self.master.config(menu=self.menubar)
 
     def build_scrollbars(self):
         """
@@ -529,7 +538,6 @@ class ScriptWidget(tk.Frame):
         except IndexError:
             # This script is last in line
             return None
-
 
     def add_widgets(self):
 
@@ -673,7 +681,7 @@ class InsertWidget(ScriptWidget):
 class ImageButton(ttk.Button):
     """docstring for ImageButton"""
     def __init__(self, *args, image=None, **kwargs):
-        image = PhotoImage(file=image)
+        image = PhotoImage(file=path.join(graphics_directory,image))
         image = image.subsample(2, 2)
         super(ImageButton, self).__init__(*args, image=image, **kwargs)
         self.image = image
@@ -682,7 +690,7 @@ class ImageButton(ttk.Button):
 class ImageLabel(ttk.Label):
     """docstring for ImageButton"""
     def __init__(self, *args, image=None, **kwargs):
-        image = PhotoImage(file=image)
+        image = PhotoImage(file=path.join(graphics_directory,image))
         image = image.subsample(2, 2)
         super(ImageLabel, self).__init__(*args, image=image, **kwargs)
         self.image = image
@@ -731,5 +739,5 @@ def reader(f,buffer):
             buffer.append(line)
         else:
             break
-
-GuiWindow()
+if __name__ == '__main__':
+    GuiWindow()
