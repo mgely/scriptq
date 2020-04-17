@@ -6,7 +6,7 @@ setuptools.setup(
     author="Mario Gely",
     author_email="mario.f.gely@gmail.com",
     description="Python script queuer",
-    long_description="A convinient way to run your python scripts one after the other.",
+    long_description="A convenient way to run your python scripts one after the other.",
     long_description_content_type="text/markdown",
     url="https://github.com/mgely/scriptq",
     package_dir={"scriptq": "src"},
