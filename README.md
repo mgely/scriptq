@@ -15,6 +15,8 @@ To launch the program run ``python -m scriptq``.
 Documentation
 -------------
 
+![image](documentation.PNG)
+
 Developper information
 ----------------------
 
