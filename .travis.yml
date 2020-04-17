@@ -16,9 +16,10 @@ services:
 python:
   - "3.8"
 
-# No specific installation beyond python
-# install:
-#   - 
+# Just to get code coverage
+install:
+  - pip install pytest 
+  - pip install pytest-cov
 
 script:
   # Run tests
