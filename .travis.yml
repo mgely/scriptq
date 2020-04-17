@@ -1,0 +1,26 @@
+# check syntax with https://config.travis-ci.com/explore
+language: python
+
+# this is needed to run tests requiring a graphical user interface
+# see https://docs.travis-ci.com/user/gui-and-headless-browsers/
+dist: xenial
+
+# Also related to GUI
+# Xvfb (short for X virtual framebuffer) is an in-memory 
+# display server for UNIX-like operating system (e.g., Linux). 
+# It enables you to run graphical applications without a display 
+# (e.g., browser tests on a CI server)
+services:
+  - xvfb
+
+python:
+  - "3.8"
+
+# No specific installation beyond python
+# install:
+#   - 
+
+script:
+  # Run tests
+  - pytest --cov=src
+  - codecov
