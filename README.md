@@ -22,5 +22,5 @@ Developper information
 
 [![Downloads](https://pepy.tech/badge/scriptq)](https://pepy.tech/project/scriptq)
 [![Build Status](https://travis-ci.com/mgely/scriptq.svg?branch=master)](https://travis-ci.com/mgely/scriptq)
-[![codecov](https://codecov.io/gh/mgely/scriptq/branch/master/graph/badge.svg)](https://codecov.io/gh/mgely/scriptq)
+<!-- [![codecov](https://codecov.io/gh/mgely/scriptq/branch/master/graph/badge.svg)](https://codecov.io/gh/mgely/scriptq) -->
 
