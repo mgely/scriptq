@@ -217,7 +217,8 @@ class BatchingFrame(tk.Canvas):
         self.running_script.log = ''
 
         # Delete the contents of the output window
-        self.output_text_widget.clear()
+        if self.output_window_visible:
+            self.output_text_widget.clear()
 
         # Start the script and setup the communication
         # with subprocess
