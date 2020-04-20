@@ -184,7 +184,7 @@ class BatchingFrame(tk.Canvas):
                 # User cancelled
                 return
 
-        elif new_position == -1:
+        if new_position == -1:
             new_position = len(self.scripts)
         else:
             new_position += self.position_0

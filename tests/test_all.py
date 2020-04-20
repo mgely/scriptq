@@ -51,6 +51,20 @@ class TestAll(unittest.TestCase):
 			)
 		self.assertEqual(g.scripts[1].script_path,script_fail)
 
+
+	def test_move_with_done(self):
+		g = open_gui()
+
+		# Run a script
+		g.insert(0,script_success) 
+		run(g,1)
+
+		g.insert(1,script_fail) # inserts after row 1 into 2
+		g.move(position = 1, # current position
+			new_position = 0 # move after this row
+			)
+		self.assertEqual(g.scripts[2].script_path,script_fail)
+
 	def test_remove(self):
 		g = open_gui()
 		g.insert(0,script_success) # inserts after row 0 into 1
