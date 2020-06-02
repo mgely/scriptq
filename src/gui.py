@@ -8,7 +8,11 @@ import time
 import tempfile
 from os import path
 import sys
-import settings
+try:
+    from . import settings
+except ImportError:
+    # Running from source 
+    import settings
 
 # Contains the graphics featured on the buttons
 graphics_directory = path.join(path.dirname(__file__), "graphics")
