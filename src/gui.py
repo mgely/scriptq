@@ -8,6 +8,7 @@ import time
 import tempfile
 from os import path
 import sys
+import settings
 
 # Contains the graphics featured on the buttons
 graphics_directory = path.join(path.dirname(__file__), "graphics")
@@ -448,10 +449,7 @@ class BatchingFrame(tk.Canvas):
         '''
 
 
-        if poll == 0:
-            # Successfully ended
-            return
-        else:
+        if poll != 0:
             # Something went wrong
 
             while True:
@@ -480,6 +478,7 @@ class BatchingFrame(tk.Canvas):
          - starting a new queued script if the 
             script ended/crashed on its own
          - stopping the run if the user forced a stop
+         - notifying the user via email if enabled
         '''
 
         if poll!=0 and self.state == 'stopped':
@@ -513,6 +512,9 @@ class BatchingFrame(tk.Canvas):
                 self.running_script.state = 'ended'
                 self.running_script.success = 'done'
             
+            if settings.gmail_notifications['enable']:
+                self.gmail_notify()
+            
 
             if self.running_script_position+1<len(self.scripts):
                 # more scripts are queued: run the next one
@@ -522,6 +524,42 @@ class BatchingFrame(tk.Canvas):
                 # no more scripts to be run: just update visual information
                 self.state = 'stopped'
                 self.update_script_widgets()
+
+    def gmail_notify(self):
+        try:
+            import smtplib 
+
+            message = 'Subject: [scriptq] script %s\n\n'%self.running_script.success
+            message += "Path -- %s\n"%self.running_script.script_path
+            message += "Status -- %s\n"%self.running_script.success
+            message += "Log -- \n%s"%self.running_script.log
+            
+            # creates SMTP session 
+            s = smtplib.SMTP('smtp.gmail.com', 587) 
+            
+            # start TLS for security 
+            s.starttls() 
+            
+            # Authentication 
+            s.login(
+                settings.gmail_notifications['sender_email'], 
+                settings.gmail_notifications['sender_password']) 
+            
+            # sending the mail 
+            s.sendmail(
+                settings.gmail_notifications['sender_email'], 
+                settings.gmail_notifications['receiver_emails'], 
+                message) 
+            
+            # terminating the session 
+            s.quit() 
+        
+        except Error as e:
+            messagebox.showinfo(
+                "Sending notification email failed with error:\n"+str(e)
+            )
+
+
 
 
     def stop(self):
