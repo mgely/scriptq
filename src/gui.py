@@ -622,6 +622,8 @@ class BatchingFrame(tk.Canvas):
                     # it should be either running or stopped
                     if self.state == 'running':
                         s.state = 'running'
+                        self.running_script = s
+                        self.running_script_position = i
                     elif self.state == 'stopped':
                         s.state = 'ready'
 

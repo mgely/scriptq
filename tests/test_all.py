@@ -13,6 +13,7 @@ script_open_success = join(test_directory,'script_open_success.py')
 script_fail = join(test_directory,'script_fail.py')
 script_nonexistent = join(test_directory,'nonexistent.py')
 script_long = join(test_directory,'script_long.py')
+script_1s = join(test_directory,'script_1s.py')
 
 def open_gui():
 	return GuiWindow(unittesting = True).bf
@@ -71,6 +72,16 @@ class TestAll(unittest.TestCase):
 		g.insert(1,script_fail) 
 		g.remove(1)
 		self.assertEqual(g.scripts[1].script_path,script_fail)
+		
+	def test_remove_whilst_running(self):
+		g = open_gui()
+		g.insert(0,script_success)
+		g.insert(1,script_1s) 
+		g.insert(2,script_success)
+		g.after(500,lambda: g.remove(1))
+		run(g,1)
+		self.assertEqual(g.scripts[2].success,'done')
+
 
 	def test_run(self):
 		g = open_gui()
