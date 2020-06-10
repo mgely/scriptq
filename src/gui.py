@@ -271,12 +271,12 @@ class BatchingFrame(tk.Canvas):
             if self.state == 'running':
                 # If running, do not allow script to be placed in first postion
                 # (above the script which is running)
-                message = " 1 = place below row 1\n etc...\n-1 = place at end"
-                minvalue = 0
+                message = " 1 = place below row 1\n2 = place below row 2\n etc..."
+                minvalue = 1
             else:
                 # If stopped
-                message = " 0 = place first \n 1 = place below row 1\n etc...\n-1 = place at end"
-                minvalue = -1
+                message = " 0 = place first \n 1 = place below row 1\n etc..."
+                minvalue = 0
 
             # Open popup window
             new_position = tk.simpledialog.askinteger("Move to", message,
@@ -287,15 +287,11 @@ class BatchingFrame(tk.Canvas):
                 # User cancelled
                 return
 
-        if new_position == -1:
-            # -1 is code for "at the end"
-            new_position = len(self.scripts)
-        else:
-            # the position the user sees does not
-            # take into account the rows of "done" scripts
-            # position_0 is the position of the first "not done"
-            # script.
-            new_position += self.position_0
+        # the position the user sees does not
+        # take into account the rows of "done" scripts
+        # position_0 is the position of the first "not done"
+        # script.
+        new_position += self.position_0
 
         # Insert the script at the new position
         self.scripts.insert(new_position,self.scripts[position])
