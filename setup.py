@@ -2,7 +2,7 @@ import setuptools
 
 setuptools.setup(
     name="scriptq",
-    version="1.1",
+    version="1.2",
     author="Mario Gely",
     author_email="mario.f.gely@gmail.com",
     description="Python script queuer",
