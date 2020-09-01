@@ -3,7 +3,7 @@ from tkinter import messagebox, filedialog, simpledialog, scrolledtext
 from tkinter import PhotoImage
 from tkinter import ttk
 import subprocess
-from threading import Thread 
+from threading import Thread
 import time
 import tempfile
 from os import path
@@ -11,12 +11,11 @@ import sys
 try:
     from . import settings
 except ImportError:
-    # Running from source 
+    # Running from source
     import settings
 
 # Contains the graphics featured on the buttons
 graphics_directory = path.join(path.dirname(__file__), "graphics")
-
 '''
 Hiearchy of Tkinter frames:
     GuiWindow.master = tk.Tk()
@@ -41,7 +40,8 @@ class GuiWindow(ttk.Frame):
     mainloop, but wait for a script to trigger
     events and manually update the GUI.
     '''
-    def __init__(self, unittesting = False):
+
+    def __init__(self, unittesting=False):
         # Initialize the frame, inside the root window (tk.Tk())
         ttk.Frame.__init__(self, master=tk.Tk())
 
@@ -65,16 +65,15 @@ class GuiWindow(ttk.Frame):
         self.master.lift()
         self.master.attributes("-topmost", True)
         self.master.attributes("-topmost", False)
-        
+
         if unittesting:
             self.update()
         else:
             try:
                 self.mainloop()
-            except Error as e:
+            except Exception as e:
                 messagebox.showinfo(
-                    "Oops.. The script queuer crashed with error\n"+str(e)
-                )
+                    "Oops.. The script queuer crashed with error\n" + str(e))
 
 
 class BatchingFrame(tk.Canvas):
@@ -87,9 +86,9 @@ class BatchingFrame(tk.Canvas):
         scripts, etc...
     '''
 
-    def __init__(self,master,**kwargs):
+    def __init__(self, master, **kwargs):
 
-        # Master is the highest level, 
+        # Master is the highest level,
         # root window here tk.Tk()
         self.master = master
 
@@ -100,7 +99,7 @@ class BatchingFrame(tk.Canvas):
         # currently or latest running ScriptWidget
         self.running_script = None
 
-        # Build another frame, which will contain 
+        # Build another frame, which will contain
         # the canvas and the scrollbar
         self.build_gridframe()
 
@@ -113,15 +112,15 @@ class BatchingFrame(tk.Canvas):
 
         # Add the canvas which will host the
         # Frame containing the script widgets
-        # Note: a canvas is necessary here to make the 
-        # whole GUI scrollable. 
+        # Note: a canvas is necessary here to make the
+        # whole GUI scrollable.
         # (there's probably a simpler alternative though..)
         self.build_canvas()
 
         # configure vertical scrollbar
         self.configure_scrollbars()
 
-        # build a window in the canvas which 
+        # build a window in the canvas which
         # will contain the ScriptWidgets
         self.build_canvas_content()
 
@@ -131,12 +130,12 @@ class BatchingFrame(tk.Canvas):
         # Build the output window
         self.build_output_window()
 
-        # This determines how oftem we collect and display 
+        # This determines how oftem we collect and display
         # the output of a running script
-        self.t_output_monitoring = 100 #ms
+        self.t_output_monitoring = 100  #ms
 
         # Either 'stopped' or 'running'
-        self.state = 'stopped' 
+        self.state = 'stopped'
 
         # When we press stop, this message is appended
         # to the log of the script output
@@ -146,19 +145,18 @@ class BatchingFrame(tk.Canvas):
         # We start just with the insertion widget
         self.scripts = [
             InsertWidget(self),
-            ]
+        ]
 
-        # Useful function which goes through the list 
+        # Useful function which goes through the list
         # self.scripts, and displays the corresponding graphical content
         self.update_script_widgets()
-
 
     def remove_all(self):
         '''
         Removes all the Scripts, from the last to the first, 
         excluding the topmost InsertWidget 
         '''
-        for position in range(len(self.scripts)-1,0,-1):
+        for position in range(len(self.scripts) - 1, 0, -1):
             self.remove(position)
 
     def build_output_window(self):
@@ -179,7 +177,7 @@ class BatchingFrame(tk.Canvas):
 
         # Open up the output window
         self.output_window = tk.Toplevel(self.master)
-        self.output_window.title("Script queuer | Output")   
+        self.output_window.title("Script queuer | Output")
         self.output_window.geometry("400x400")
 
         # Keep track of the window being visible
@@ -187,28 +185,27 @@ class BatchingFrame(tk.Canvas):
 
         # Window size cannot be reduced beyond
         # a certain size
-        self.output_window.minsize(200,150)
+        self.output_window.minsize(200, 150)
 
         # When closing the window run self.on_closing_output_window
-        self.output_window.protocol("WM_DELETE_WINDOW", self.on_closing_output_window)
+        self.output_window.protocol("WM_DELETE_WINDOW",
+                                    self.on_closing_output_window)
 
         # Put a scrollable text region in it, and make is stretchable
         self.output_text_widget = ScrolledLabel(self.output_window)
-        self.output_text_widget.grid(column = 0, row=0, sticky = 'news')
+        self.output_text_widget.grid(column=0, row=0, sticky='news')
         self.output_window.rowconfigure(0, weight=1)
         self.output_window.columnconfigure(0, weight=1)
 
         # Add a button to toggle following the output / autoscrolling
-        b = ToggleAutoscrollButton(self.output_window, 
-          text='Autoscroll')
-        b.grid(column = 0,row=1, sticky = 'nws')
+        b = ToggleAutoscrollButton(self.output_window, text='Autoscroll')
+        b.grid(column=0, row=1, sticky='nws')
 
         if self.running_script is not None:
-            # Is there is no running script, 
+            # Is there is no running script,
             # show the log of the last run script
             self.output_text_widget.insert(self.running_script.log)
             self.scroll_output_window_down()
-
 
     def on_closing_output_window(self):
         '''
@@ -221,7 +218,7 @@ class BatchingFrame(tk.Canvas):
         # Close the window
         self.output_window.destroy()
 
-    def insert(self, position, script_path = None):
+    def insert(self, position, script_path=None):
         '''
         Will insert a new script after the row indicated by 
         the input integer `position`. 
@@ -237,7 +234,8 @@ class BatchingFrame(tk.Canvas):
             else:
                 # If a script was already inserted,
                 # open the file prompt at the same directory
-                script_path = filedialog.askopenfilename(initialdir=self.latest_searched_directory)
+                script_path = filedialog.askopenfilename(
+                    initialdir=self.latest_searched_directory)
             if script_path == "":
                 # User cancelled
                 return
@@ -246,22 +244,21 @@ class BatchingFrame(tk.Canvas):
             self.latest_searched_directory = path.dirname(script_path)
 
         # Creates a new script widget, by default it will be queued
-        sw = ScriptWidget(self, script_path = script_path, state = 'queued')
+        sw = ScriptWidget(self, script_path=script_path, state='queued')
 
         # add it to the list of scripts
-        self.scripts.insert(position+1,sw)
+        self.scripts.insert(position + 1, sw)
 
         # update the scripts states and graphical information
         self.update_script_widgets()
 
-    def move(self, position, new_position = None):
+    def move(self, position, new_position=None):
         '''
         Move a script from a position (row `position`) to a 
         new position (after row `new_position`).
         The new position will be chosen in a popup window
         by the user, or given as a kwarg (for unittesting purposes).
         '''
-
 
         if new_position is None:
             # No postion was given: prompt user
@@ -279,9 +276,12 @@ class BatchingFrame(tk.Canvas):
                 minvalue = 0
 
             # Open popup window
-            new_position = tk.simpledialog.askinteger("Move to", message,
-                                    parent=self.master,
-                                     minvalue=minvalue, maxvalue=len(self.scripts))
+            new_position = tk.simpledialog.askinteger("Move to",
+                                                      message,
+                                                      parent=self.master,
+                                                      minvalue=minvalue,
+                                                      maxvalue=len(
+                                                          self.scripts))
 
             if new_position is None:
                 # User cancelled
@@ -294,13 +294,13 @@ class BatchingFrame(tk.Canvas):
         new_position += self.position_0
 
         # Insert the script at the new position
-        self.scripts.insert(new_position,self.scripts[position])
+        self.scripts.insert(new_position, self.scripts[position])
 
         # Remove the script at the old position
         if new_position > position:
             self.scripts.pop(position)
         else:
-            # If the script is moved up, then 
+            # If the script is moved up, then
             # the old position is actually +1
             self.scripts.pop(position + 1)
 
@@ -336,16 +336,14 @@ class BatchingFrame(tk.Canvas):
         if self.output_window_visible:
             self.output_text_widget.clear()
 
-        # Start the script and 
+        # Start the script and
         # setup the communication
         # with subprocess
         self.start_script_process(script_path)
 
-        # Start the periodic monitoring of the script, 
+        # Start the periodic monitoring of the script,
         # to capture the output, but also detect the end/error
-        self.after(
-                self.t_output_monitoring, 
-                self.monitor_script_process)
+        self.after(self.t_output_monitoring, self.monitor_script_process)
 
         # Update the states of this object and the script
         self.state = 'running'
@@ -355,7 +353,6 @@ class BatchingFrame(tk.Canvas):
         self.update_script_widgets()
 
     def start_script_process(self, script):
-
         '''
         Start the script subprocess
          --- the -u option foces stdout, stderr streams to be 
@@ -364,13 +361,11 @@ class BatchingFrame(tk.Canvas):
          --- the cwd is chosen to be the folder in which 
          the script is located
         '''
-        self.script_process = subprocess.Popen(
-            ['python','-u',script], 
-            cwd = path.dirname(script),
-            stdout = subprocess.PIPE,
-            stderr = subprocess.PIPE, 
-            bufsize=1)
-
+        self.script_process = subprocess.Popen(['python', '-u', script],
+                                               cwd=path.dirname(script),
+                                               stdout=subprocess.PIPE,
+                                               stderr=subprocess.PIPE,
+                                               bufsize=1)
         '''
         This list will be populated
         with contents of the subprocess
@@ -384,12 +379,10 @@ class BatchingFrame(tk.Canvas):
         # in a seperate thread, collect the output
         # of the subprocess and load it into
         # line_buffer list
-        self.buffer_filling_thread =Thread(target=reader,
-            args=(
-                    self.script_process.stdout,
-                    self.line_buffer
-                    ))
-        self.buffer_filling_thread.daemon=True
+        self.buffer_filling_thread = Thread(target=reader,
+                                            args=(self.script_process.stdout,
+                                                  self.line_buffer))
+        self.buffer_filling_thread.daemon = True
         self.buffer_filling_thread.start()
 
     def write_to_output(self, to_write):
@@ -422,24 +415,21 @@ class BatchingFrame(tk.Canvas):
             self.write_to_output(self.line_buffer.pop(0).decode("utf-8"))
 
         # if autoscroll is activated, scroll the output window
-        # to the latest written 
+        # to the latest written
         if self.output_window.follow:
             self.scroll_output_window_down()
 
         # poll checks on the status of the subprocess
-        poll =self.script_process.poll()
+        poll = self.script_process.poll()
 
-        if poll is None:  
-            # Hasnt crashed or ended 
+        if poll is None:
+            # Hasnt crashed or ended
             # monitor again in a time `self.t_output_monitoring`
-            self.after(
-                self.t_output_monitoring, 
-                self.monitor_script_process)
+            self.after(self.t_output_monitoring, self.monitor_script_process)
 
         else:
             self.treat_end_of_script(poll)
             self.treat_next_queued_script(poll)
-
 
     def treat_end_of_script(self, poll):
         '''
@@ -447,7 +437,6 @@ class BatchingFrame(tk.Canvas):
         Appends the output/log to give maximum 
         information to the user about causes of crashes.
         '''
-
 
         if poll != 0:
             # Something went wrong
@@ -481,19 +470,19 @@ class BatchingFrame(tk.Canvas):
          - notifying the user via email if enabled
         '''
 
-        if poll!=0 and self.state == 'stopped':
+        if poll != 0 and self.state == 'stopped':
             # User interrupted the script
 
             # The script is stopped and made ready to go again
             self.running_script.state = 'ready'
 
-            # It is also duplicated and marked above as a 
-            # stopped script, so that the user may also inspect the 
+            # It is also duplicated and marked above as a
+            # stopped script, so that the user may also inspect the
             # logging file
             stopped = self.running_script
-            duplicate = ScriptWidget(self, 
-                script_path = stopped.script_path, 
-                state = 'ended')
+            duplicate = ScriptWidget(self,
+                                     script_path=stopped.script_path,
+                                     state='ended')
             duplicate.success = 'stopped'
             duplicate.log = stopped.log
             self.scripts.insert(self.running_script_position, duplicate)
@@ -502,23 +491,22 @@ class BatchingFrame(tk.Canvas):
             self.update_script_widgets()
 
         else:
-            if poll!=0:
+            if poll != 0:
                 # Script stopped because of an error
                 self.running_script.state = 'ended'
                 self.running_script.success = 'failed'
-            
-            elif poll==0:
+
+            elif poll == 0:
                 # Script successfully ended
                 self.running_script.state = 'ended'
                 self.running_script.success = 'done'
-            
+
             if settings.gmail_notifications['enable']:
                 self.gmail_notify()
-            
 
-            if self.running_script_position+1<len(self.scripts):
+            if self.running_script_position + 1 < len(self.scripts):
                 # more scripts are queued: run the next one
-                self.run(position = self.running_script_position+1)
+                self.run(position=self.running_script_position + 1)
 
             else:
                 # no more scripts to be run: just update visual information
@@ -527,40 +515,34 @@ class BatchingFrame(tk.Canvas):
 
     def gmail_notify(self):
         try:
-            import smtplib 
+            import smtplib
 
-            message = 'Subject: [scriptq] script %s\n\n'%self.running_script.success
-            message += "Path -- %s\n"%self.running_script.script_path
-            message += "Status -- %s\n"%self.running_script.success
-            message += "Log -- \n%s"%self.running_script.log
-            
-            # creates SMTP session 
-            s = smtplib.SMTP('smtp.gmail.com', 587) 
-            
-            # start TLS for security 
-            s.starttls() 
-            
-            # Authentication 
-            s.login(
-                settings.gmail_notifications['sender_email'], 
-                settings.gmail_notifications['sender_password']) 
-            
-            # sending the mail 
-            s.sendmail(
-                settings.gmail_notifications['sender_email'], 
-                settings.gmail_notifications['receiver_emails'], 
-                message) 
-            
-            # terminating the session 
-            s.quit() 
-        
-        except Error as e:
+            message = 'Subject: [scriptq] script %s\n\n' % self.running_script.success
+            message += "Path -- %s\n" % self.running_script.script_path
+            message += "Status -- %s\n" % self.running_script.success
+            message += "Log -- \n%s" % self.running_script.log
+
+            # creates SMTP session
+            s = smtplib.SMTP('smtp.gmail.com', 587)
+
+            # start TLS for security
+            s.starttls()
+
+            # Authentication
+            s.login(settings.gmail_notifications['sender_email'],
+                    settings.gmail_notifications['sender_password'])
+
+            # sending the mail
+            s.sendmail(settings.gmail_notifications['sender_email'],
+                       settings.gmail_notifications['receiver_emails'],
+                       message)
+
+            # terminating the session
+            s.quit()
+
+        except Exception as e:
             messagebox.showinfo(
-                "Sending notification email failed with error:\n"+str(e)
-            )
-
-
-
+                "Sending notification email failed with error:\n" + str(e))
 
     def stop(self):
         '''
@@ -595,19 +577,19 @@ class BatchingFrame(tk.Canvas):
         # it is displayed in the GUI starting from 1
         row = 1
 
-        for i,s in enumerate(self.scripts):
+        for i, s in enumerate(self.scripts):
 
             # All scripts are given a position, running from 0 upwards
-            # this is not necessarily the same as the row and acts 
+            # this is not necessarily the same as the row and acts
             # as a unique identifier of the script
             s.position = i
 
             # Scripts which are done are given no row information
             s.row = None
 
-            if s.state in ['running', 'ready', 'queued'] or row>1:
-                
-                if row==1:
+            if s.state in ['running', 'ready', 'queued'] or row > 1:
+
+                if row == 1:
                     # First script running/to-run
 
                     # Helps in converting rows given by the user
@@ -623,7 +605,7 @@ class BatchingFrame(tk.Canvas):
                     elif self.state == 'stopped':
                         s.state = 'ready'
 
-                elif row>1:
+                elif row > 1:
                     # this script is lower down the queue:
                     # if they were just moved for example, we should
                     # adjust their state accordingly
@@ -631,10 +613,9 @@ class BatchingFrame(tk.Canvas):
 
                 # These non-done scripts are given a row
                 s.row = row
-                row+=1
+                row += 1
 
-
-        for i,s in enumerate(self.scripts):
+        for i, s in enumerate(self.scripts):
             # Place the script in the grid
             s.grid(row=i, column=0, sticky='news')
             # Populate it with buttons etc...
@@ -689,10 +670,7 @@ class BatchingFrame(tk.Canvas):
         self.menubar.add_cascade(label="View", menu=menu)
 
         # add cascade menu items
-        menu.add_command(
-            label="Output",
-            command=self.build_output_window)
-
+        menu.add_command(label="Output", command=self.build_output_window)
 
         # Add the menubar to the application
         self.master.config(menu=self.menubar)
@@ -702,8 +680,7 @@ class BatchingFrame(tk.Canvas):
         Builds a vertical scrollbars and places
         it in the window
         """
-        self.vbar = ttk.Scrollbar(
-            self.frame, orient="vertical")
+        self.vbar = ttk.Scrollbar(self.frame, orient="vertical")
 
         self.vbar.grid(row=0, column=1, sticky="ns")
 
@@ -724,7 +701,6 @@ class BatchingFrame(tk.Canvas):
 
         self.grid(row=0, column=0, sticky="nswe")
 
-
     def configure_scrollbars(self):
         """
         Define what functions the scrollbars should call
@@ -740,7 +716,7 @@ class BatchingFrame(tk.Canvas):
         """
 
         # stop from scolling up beyond a certain point
-        if float(args[1])<0:
+        if float(args[1]) < 0:
             args = (args[0], "0")
 
         # shift canvas vertically
@@ -765,10 +741,10 @@ class BatchingFrame(tk.Canvas):
         if event.num == 4 or event.delta > 0:
             direction = -1
 
-        # Move the canvas appropriately, and stop 
+        # Move the canvas appropriately, and stop
         # the user from scrolling to far out
         if direction == 1:
-            if self.canvasy(self.winfo_height()) < 2*self.bbox("all")[3]:
+            if self.canvasy(self.winfo_height()) < 2 * self.bbox("all")[3]:
                 self.yview_scroll(direction, tk.UNITS)
         elif direction == -1:
             if self.canvasy(0) > self.bbox("all")[1]:
@@ -787,11 +763,12 @@ class BatchingFrame(tk.Canvas):
         Build a window which will contain the widgets
         '''
         self.canvas_content = tk.Frame(self)
-        self.create_window((0, 0), 
-            window=self.canvas_content, 
-            anchor='nw', 
-            width = 1000)
+        self.create_window((0, 0),
+                           window=self.canvas_content,
+                           anchor='nw',
+                           width=1000)
         self.canvas_content.columnconfigure(0, weight=1)
+
 
 class ScriptWidget(tk.Frame):
     '''
@@ -799,15 +776,13 @@ class ScriptWidget(tk.Frame):
     elements and information about a script.
     '''
 
-    def __init__(self, parent, 
-            script_path = None, state = None, success = ''):
+    def __init__(self, parent, script_path=None, state=None, success=''):
 
         super(ScriptWidget, self).__init__(parent.canvas_content)
 
-        # A reference to the canvas in which 
+        # A reference to the canvas in which
         # the widget is placed
         self.parent = parent
-
         '''
         string representing the state
         of the script, can be one of:
@@ -817,7 +792,6 @@ class ScriptWidget(tk.Frame):
          - queued 
         '''
         self.state = state
-
         '''
         Is not None only if the script is ended.
         Can then be one of:
@@ -831,16 +805,16 @@ class ScriptWidget(tk.Frame):
         self.script_path = script_path
 
         # Row of the script displayed in the GUI
-        # None if the script has ended, 
+        # None if the script has ended,
         # 1 and above if not
-        self.row = None 
+        self.row = None
 
         # Position of the script regardless of the state
         # Goes from 0 up
         self.position = None
 
         # Vertical padding of the graphical elements
-        self.pady = (1,1)
+        self.pady = (1, 1)
 
         # Stores all the widgets displayed
         self.all_widgets = []
@@ -851,7 +825,7 @@ class ScriptWidget(tk.Frame):
         one. Returns None is this is the last script.
         '''
         try:
-            return self.parent.scripts[self.position+1].state
+            return self.parent.scripts[self.position + 1].state
         except IndexError:
             # This script is last in line
             return None
@@ -868,30 +842,32 @@ class ScriptWidget(tk.Frame):
             w.destroy()
         self.all_widgets = []
 
-
         ##################
         # INSERT BUTTON
         ##################
-        if self.next_script_state() in ['ready', 'queued',None]:
-            b = ImageButton(self,image = 'insert.gif', 
-                command = (lambda: self.parent.insert(self.position)))
+        if self.next_script_state() in ['ready', 'queued', None]:
+            b = ImageButton(
+                self,
+                image='insert.gif',
+                command=(lambda: self.parent.insert(self.position)))
         else:
-            b = ImageButton(self,image = 'half_blank.gif')
+            b = ImageButton(self, image='half_blank.gif')
             b.config(state=tk.DISABLED)
-        b.grid(row=0, column=0, sticky='swe', padx = (5,0))
+        b.grid(row=0, column=0, sticky='swe', padx=(5, 0))
         self.all_widgets.append(b)
-
 
         ##################
         # ROW LABEL
         ##################
         if self.state == 'ended':
-            l = ImageLabel(self,image = 'blank.gif', compound = tk.CENTER)
+            l = ImageLabel(self, image='blank.gif', compound=tk.CENTER)
         else:
-            l = ImageLabel(self,image = 'blank.gif', compound = tk.CENTER, text = self.row)
-        l.grid(row=0, column=1,sticky='new')
+            l = ImageLabel(self,
+                           image='blank.gif',
+                           compound=tk.CENTER,
+                           text=self.row)
+        l.grid(row=0, column=1, sticky='new')
         self.all_widgets.append(l)
-
 
         ##################
         # STATE LABEL
@@ -900,109 +876,117 @@ class ScriptWidget(tk.Frame):
             text = self.success
         else:
             text = self.state
-        b = ImageLabel(self,text = text, 
-            image = 'label_'+self.state+self.success+".gif",
-            compound = tk.CENTER)
+        b = ImageLabel(self,
+                       text=text,
+                       image='label_' + self.state + self.success + ".gif",
+                       compound=tk.CENTER)
         b.grid(row=0, column=2, sticky='new')
         self.all_widgets.append(b)
-
 
         ##################
         # REMOVE BUTTON
         ##################
         if self.state == 'running':
-            b = ImageButton(self,image = 'blank.gif')
+            b = ImageButton(self, image='blank.gif')
             b.config(state=tk.DISABLED)
         else:
-            b = ImageButton(self,image = 'remove.gif', 
-                command = (lambda: self.parent.remove(self.position)))
+            b = ImageButton(
+                self,
+                image='remove.gif',
+                command=(lambda: self.parent.remove(self.position)))
         b.grid(row=0, column=3, sticky='new', pady=self.pady)
         self.all_widgets.append(b)
-
 
         ##################
         # MOVE BUTTON
         ##################
-        if self.state in ['queued','ready'] :
-            b = ImageButton(self,image = 'move.gif', 
-                command = (lambda: self.parent.move(self.position)))
+        if self.state in ['queued', 'ready']:
+            b = ImageButton(self,
+                            image='move.gif',
+                            command=(lambda: self.parent.move(self.position)))
         else:
-            b = ImageButton(self,image = 'blank.gif')
+            b = ImageButton(self, image='blank.gif')
             b.config(state=tk.DISABLED)
         b.grid(row=0, column=4, sticky='new', pady=self.pady)
         self.all_widgets.append(b)
-
 
         ##################
         # RUN/STOP BUTTON
         ##################
         if self.state == 'running':
-            b = ImageButton(self,image = 'stop.gif', 
-            command = self.parent.stop)
+            b = ImageButton(self, image='stop.gif', command=self.parent.stop)
         elif self.state == 'ready':
-            b = ImageButton(self,image = 'run.gif',
-                command = (lambda: self.parent.run(self.position)))
+            b = ImageButton(self,
+                            image='run.gif',
+                            command=(lambda: self.parent.run(self.position)))
         else:
-            b = ImageButton(self,image = 'blank.gif')
+            b = ImageButton(self, image='blank.gif')
             b.config(state=tk.DISABLED)
         b.grid(row=0, column=5, sticky='new', pady=self.pady)
         self.all_widgets.append(b)
-        
+
         ##################
         # LOG/OUTPUT BUTTON
         ##################
         if self.state == 'ended':
             b = ImageButton(self,
-                text = "view log", 
-                command = self.view_log,
-                image = 'blank.gif',
-                compound = tk.CENTER)
-        elif self.state in ['running','ready']:
+                            text="view log",
+                            command=self.view_log,
+                            image='blank.gif',
+                            compound=tk.CENTER)
+        elif self.state in ['running', 'ready']:
             b = ImageButton(self,
-                text = "view output", 
-                command = self.parent.build_output_window,
-                image = 'blank.gif',
-                compound = tk.CENTER)
+                            text="view output",
+                            command=self.parent.build_output_window,
+                            image='blank.gif',
+                            compound=tk.CENTER)
         else:
             b = ImageButton(self,
-                text = "", 
-                command = self.parent.build_output_window,
-                image = 'blank.gif',
-                compound = tk.CENTER)
+                            text="",
+                            command=self.parent.build_output_window,
+                            image='blank.gif',
+                            compound=tk.CENTER)
             b.config(state=tk.DISABLED)
         self.all_widgets.append(b)
-        b.grid(row=0, column=6, sticky='ne', pady=self.pady, padx=(2,10))
-        
+        b.grid(row=0, column=6, sticky='ne', pady=self.pady, padx=(2, 10))
+
         ##################
         # SCRIPT PATH LABEL
         ##################
-        b = tk.Label(self,text = self.script_path,
-            anchor = tk.W,
-            )
-        b.grid(row=0, column=7,columnspan=1, sticky='new', pady=self.pady, padx = (0,40))
+        b = tk.Label(
+            self,
+            text=self.script_path,
+            anchor=tk.W,
+        )
+        b.grid(row=0,
+               column=7,
+               columnspan=1,
+               sticky='new',
+               pady=self.pady,
+               padx=(0, 40))
         self.columnconfigure(7, weight=1)
         self.all_widgets.append(b)
         self.update()
         # Wrap the path text
-        b.config(wraplength = b.winfo_width()-50)
+        b.config(wraplength=b.winfo_width() - 50)
 
     def view_log(self):
 
         # Open up the output window
         self.log_window = tk.Toplevel(self.parent.master)
-        self.log_window.title("Script queuer | Log | "+self.script_path) 
+        self.log_window.title("Script queuer | Log | " + self.script_path)
 
-        # Opening size of the window  
+        # Opening size of the window
         self.log_window.geometry("400x400")
 
         # Minimum size of the window
-        self.log_window.minsize(200,150)
+        self.log_window.minsize(200, 150)
 
         # Put a scrollable text region in it
         self.log_text_widget = ScrolledLabel(self.log_window)
-        self.log_text_widget.grid(column = 0, row=0, sticky = 'news')
+        self.log_text_widget.grid(column=0, row=0, sticky='news')
 
-        # Add the log text 
+        # Add the log text
         self.log_text_widget.insert(self.log)
 
         # Scroll all the way down to the end
@@ -1016,22 +1000,26 @@ class ScriptWidget(tk.Frame):
 class InsertWidget(ScriptWidget):
     '''Like Script Widget, but with just an insert button.
     '''
+
     def __init__(self, parent):
-        super(InsertWidget, self).__init__(parent, script_path = None, state = None, success = None)
+        super(InsertWidget, self).__init__(parent,
+                                           script_path=None,
+                                           state=None,
+                                           success=None)
 
     def add_widgets(self):
         '''
         Add the graphical elements of the widget
         '''
-        if self.next_script_state() in ['ready','queued', None]:
-            b = ImageButton(self,image = 'insert.gif', 
-                command = (lambda: self.parent.insert(self.position)))
+        if self.next_script_state() in ['ready', 'queued', None]:
+            b = ImageButton(
+                self,
+                image='insert.gif',
+                command=(lambda: self.parent.insert(self.position)))
         else:
-            b = ImageButton(self,image = 'half_blank.gif')
+            b = ImageButton(self, image='half_blank.gif')
             b.config(state=tk.DISABLED)
-        b.grid(row=0, column=0, sticky='swe', padx = (5,0))
-
-
+        b.grid(row=0, column=0, sticky='swe', padx=(5, 0))
 
 
 class ImageButton(ttk.Button):
@@ -1039,10 +1027,11 @@ class ImageButton(ttk.Button):
     which automizes the importation of the 
     buttons picture.
     '''
+
     def __init__(self, *args, image=None, **kwargs):
 
         # Import image
-        image = PhotoImage(file=path.join(graphics_directory,image))
+        image = PhotoImage(file=path.join(graphics_directory, image))
 
         # Make two times smaller
         image = image.subsample(2, 2)
@@ -1055,22 +1044,25 @@ class ImageButton(ttk.Button):
 
 class ImageLabel(ttk.Label):
     """docstring for ImageButton"""
+
     def __init__(self, *args, image=None, **kwargs):
 
         # Import image
-        image = PhotoImage(file=path.join(graphics_directory,image))
-        
+        image = PhotoImage(file=path.join(graphics_directory, image))
+
         # Make two times smaller
         image = image.subsample(2, 2)
-        
+
         super(ImageLabel, self).__init__(*args, image=image, **kwargs)
-        
+
         # This is necessary otherwise the picture dosnt appear somehow
         self.image = image
+
 
 class ToggleAutoscrollButton(tk.Radiobutton):
     """Button which turns auto scrolling on and off.
     """
+
     def __init__(self, parent, text):
         self.parent = parent
 
@@ -1082,8 +1074,11 @@ class ToggleAutoscrollButton(tk.Radiobutton):
         # when this variable is set to True
         self.parent.follow = True
 
-        super(ToggleAutoscrollButton, self).__init__(parent, 
-            text = text, variable = self.state, value = True, command = self.click)
+        super(ToggleAutoscrollButton, self).__init__(parent,
+                                                     text=text,
+                                                     variable=self.state,
+                                                     value=True,
+                                                     command=self.click)
 
     def click(self):
         '''
@@ -1092,14 +1087,15 @@ class ToggleAutoscrollButton(tk.Radiobutton):
 
         if self.state.get():
             # If autoscrolling is on
-            self.config(value = False)
+            self.config(value=False)
             self.parent.follow = False
 
         else:
             # If autoscrolling is off
-            self.config(value = True)   
-            self.state.set(True)    
+            self.config(value=True)
+            self.state.set(True)
             self.parent.follow = True
+
 
 class ScrolledLabel(scrolledtext.ScrolledText):
     """wrapper around scrolledtext, to make
@@ -1117,20 +1113,22 @@ class ScrolledLabel(scrolledtext.ScrolledText):
 
     def clear(self):
         self.configure(state='normal')
-        self.delete("1.0","end")
+        self.delete("1.0", "end")
         self.configure(state='disabled')
 
-def reader(f,buffer):
+
+def reader(f, buffer):
     '''Utility function runing in a thread
     which transfers any lines from the 
     pipe `f` into the list `buffer`
     '''
     while True:
-        line=f.readline()
+        line = f.readline()
         if line:
             buffer.append(line)
         else:
             break
+
 
 if __name__ == '__main__':
     GuiWindow()
